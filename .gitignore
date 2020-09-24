@@ -1,0 +1,4 @@
+test.py
+secrets.py
+db.sqlite3
+migrations/
