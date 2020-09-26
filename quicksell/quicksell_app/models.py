@@ -11,6 +11,7 @@ class User(AbstractUser):
 
 	key = models.AutoField(primary_key=True, editable=False)
 	user_id = models.UUIDField(unique=True, default=uuid.uuid4)
+	email = models.EmailField(unique=True, null=False, blank=False)
 	location = models.ForeignKey(
 		'Location', null=True, blank=True, on_delete=models.SET_NULL)
 	online = models.BooleanField(default=True)

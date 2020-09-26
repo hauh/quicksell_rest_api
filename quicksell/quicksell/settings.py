@@ -131,9 +131,9 @@ REST_FRAMEWORK = {
 		'rest_framework.permissions.IsAuthenticated',
 	),
 	'DEFAULT_AUTHENTICATION_CLASSES': (
-		'rest_framework.authentication.SessionAuthentication',
 		'rest_framework.authentication.TokenAuthentication',
 	),
 	'DEFAULT_VERSIONING_CLASS':
 		'rest_framework.versioning.AcceptHeaderVersioning',
+	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
 }

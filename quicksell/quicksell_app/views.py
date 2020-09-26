@@ -1,14 +1,47 @@
 """Views."""
 
+from rest_framework.generics import (
+	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
+)
 from rest_framework.viewsets import ModelViewSet
 from quicksell_app import models, serializers, permissions
 
 
-class Users(ModelViewSet):
-	"""Returns user."""
+class UserList(ListAPIView):
+	"""List Users."""
 
 	queryset = models.User.objects
-	serializer_class = serializers.UserInfo
+	serializer_class = serializers.PublicUser
+
+
+class UserDetail(RetrieveAPIView):
+	"""Retrieve User."""
+
+	queryset = models.User.objects
+	lookup_field = 'username'
+
+	def get_serializer_class(self):
+		if (self.request.user.is_staff
+		or self.request.user.username == self.request.query_params.get('username')):
+			return serializers.PrivateUser
+		return serializers.PublicUser
+
+
+class UserCreate(CreateAPIView):
+	"""Creates User."""
+
+	queryset = models.User.objects
+	serializer_class = serializers.PrivateUser
+	permission_classes = ()
+
+
+class UserUpdate(UpdateAPIView):
+	"""Updates User."""
+
+	queryset = models.User.objects
+	serializer_class = serializers.PrivateUser
+	permission_classes = (permissions.AccessProfile,)
+	lookup_field = 'username'
 
 
 class Listings(ModelViewSet):
@@ -17,7 +50,6 @@ class Listings(ModelViewSet):
 	queryset = models.Listing.objects
 	serializer_class = serializers.Listing
 	lookup_field = 'listing_id'
-	permission_classes = [permissions.AccessProfile]
 
 	def get_queryset(self):
 		queryset = models.Listing.objects.all()

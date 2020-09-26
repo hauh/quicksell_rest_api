@@ -4,9 +4,7 @@ from rest_framework import permissions
 
 
 class AccessProfile(permissions.BasePermission):
-	"""User can modify only it's own profile."""
+	"""Restricts control over account to it's owner or stuff."""
 
 	def has_object_permission(self, request, view, obj):
-		if request.method in permissions.SAFE_METHODS:
-			return True
-		return obj.user == request.user
+		return request.user.is_staff or obj == request.user
