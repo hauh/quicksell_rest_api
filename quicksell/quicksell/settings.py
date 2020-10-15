@@ -127,6 +127,7 @@ STATIC_URL = '/static/'
 
 
 REST_FRAMEWORK = {
+	'DEFAULT_METADATA_CLASS': 'quicksell_app.metadata.NoMetadata',
 	'DEFAULT_PERMISSION_CLASSES': (
 		# 'rest_framework.permissions.IsAuthenticated',
 	),
