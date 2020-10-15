@@ -7,12 +7,12 @@ from quicksell_app import views
 
 
 router = DefaultRouter()
-router.register(r'listings', views.Listings, basename='listing')
+# router.register(r'listings', views.Listing, basename='listing')
 
 urlpatterns = router.urls + [
 	path(r'users/', views.UserList.as_view(), name='user-list'),
 	path(r'users/new', views.UserCreate.as_view(), name='user-create'),
-	path(r'users/<username>/', views.UserDetail.as_view(), name='user-detail'),
-	path(r'users/<username>/edit', views.UserUpdate.as_view(), name='user-update'),  # noqa
+	path(r'users/<id>/', views.UserDetail.as_view(), name='user-detail'),
+	path(r'users/<id>/edit', views.UserUpdate.as_view(), name='user-update'),  # noqa
 	path(r'auth/', obtain_auth_token, name='auth'),
 ]

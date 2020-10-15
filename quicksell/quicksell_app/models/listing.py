@@ -1,28 +1,8 @@
-"""Models."""
+"""Listing model."""
 
 import uuid
 
 from django.db import models
-from django.contrib.auth.models import AbstractUser
-
-
-class User(AbstractUser):
-	"""User model."""
-
-	key = models.AutoField(primary_key=True, editable=False)
-	user_id = models.UUIDField(unique=True, default=uuid.uuid4)
-	email = models.EmailField(unique=True, null=False, blank=False)
-	location = models.ForeignKey(
-		'Location', null=True, blank=True, on_delete=models.SET_NULL)
-	online = models.BooleanField(default=True)
-
-
-class Location(models.Model):
-	"""Location model."""
-
-	location_id = models.AutoField(primary_key=True)
-	longitude = models.DecimalField(max_digits=9, decimal_places=6)
-	latitude = models.DecimalField(max_digits=9, decimal_places=6)
 
 
 class Listing(models.Model):
@@ -36,7 +16,6 @@ class Listing(models.Model):
 		CAT3 = '3', 'Category3'
 		CAT4 = '4', 'Category4'
 
-	key = models.AutoField(primary_key=True, editable=False)
 	listing_id = models.UUIDField(unique=True, default=uuid.uuid4)
 	title = models.CharField(max_length=200)
 	sold = models.BooleanField(default=False)
