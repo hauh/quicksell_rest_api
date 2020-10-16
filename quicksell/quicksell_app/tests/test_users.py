@@ -1,41 +1,73 @@
 """User testing."""
 
-from uuid import uuid4
+from functools import partial
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from quicksell_app.models import User
+from quicksell_app import models, serializers
 
 
 class UsersTests(APITestCase):
-	"""Mocking a User."""
+	"""Testing users' actions."""
 
-	url_users_list = reverse('user-list')
 	url_user_create = reverse('user-create')
-	url_auth = reverse('auth')
+	url_user_profile = partial(reverse, 'user-detail')
 
-	def __init__(self, *args, **kwargs):
-		self.username = 'test_user_' + uuid4().hex
-		self.headers = {'Authorization': None}
-		super().__init__(*args, **kwargs)
+	good_mail = "test@good.mail"
+	good_pass = "!@34QGoodPass"
 
-	def test_create_account(self):
-		data = {
-			'username': self.username,
-			'email': self.username + '@test.api',
-			'password': 'password'
+	created_user_fields = [
+		field for field in serializers.User.Meta.fields
+		if not getattr(serializers.User.Meta, 'extra_kwargs', {})
+			.get(field, {}).get('write_only')
+	]
+	created_profile_fields = [
+		field for field in serializers.Profile.Meta.fields
+		if not getattr(serializers.Profile.Meta, 'extra_kwargs', {})
+			.get(field, {}).get('write_only')
+	]
+
+	def test_create_user(self, uid=0):
+		request_data = {
+			'email': self.good_mail + str(uid),
+			'password': self.good_pass
 		}
-
-		# create
-		response = self.client.post(UsersTests.url_user_create, data, format='json')
+		response = self.client.post(self.url_user_create, request_data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		self.assertEqual(User.objects.count(), 1)
-		self.assertEqual(response.data['username'], self.username)
-		self.assertEqual(response.data['email'], data['email'])
+		self.assertEqual(list(response.data), self.created_user_fields)
+		return response
 
-		# authorize
-		response = self.client.post(UsersTests.url_auth, data, format='json')
+	def test_bad_request(self):
+		bad_mail = "test@bad_mail"
+		bad_pass = "badpass"
+		for data in (
+			{'email': bad_mail, 'password': bad_pass},
+			{'email': self.good_mail, 'password': bad_pass},
+			{'email': bad_mail, 'password': self.good_pass},
+			{'email': self.good_mail},
+			{'password': self.good_pass},
+		):
+			response = self.client.post(self.url_user_create, data)
+			self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_duplicate_mail(self):
+		request_data = {
+			'email': self.test_create_user().data['email'],
+			'password': self.good_pass
+		}
+		response = self.client.post(self.url_user_create, request_data)
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertEqual(models.User.objects.count(), 1)
+
+	def test_check_profile(self, uid=None):
+		if not uid:
+			uid = self.test_create_user().data['id']
+		response = self.client.get(self.url_user_profile(args=(uid,)))
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-		self.assertIn('token', response.data)
+		self.assertEqual(list(response.data), self.created_profile_fields)
 
-		self.headers['Authorization'] = 'Token ' + response.data['token']
+	def test_create_many_users(self):
+		for i in range(100):
+			response = self.test_create_user(i)
+			self.test_check_profile(response.data['id'])
+			self.assertEqual(models.User.objects.count(), i + 1)
