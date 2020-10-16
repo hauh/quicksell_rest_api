@@ -2,7 +2,7 @@
 
 from rest_framework.serializers import ModelSerializer
 from quicksell_app import models
-from .user import UserProfile
+from .user import Profile
 
 
 class ListingPreview(ModelSerializer):
@@ -17,7 +17,7 @@ class ListingPreview(ModelSerializer):
 class Listing(ModelSerializer):
 	"""Full Listing serializers."""
 
-	owner = UserProfile(read_only=True)
+	owner = Profile(read_only=True)
 
 	class Meta:
 		model = models.Listing

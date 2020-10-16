@@ -1,11 +1,11 @@
 """User serilaizers."""
 
 from django.contrib.auth import password_validation
-from rest_framework.serializers import ModelSerializer
+from rest_framework import serializers
 from quicksell_app import models
 
 
-class User(ModelSerializer):
+class User(serializers.ModelSerializer):
 	"""Users's account."""
 
 	class Meta:
@@ -21,16 +21,16 @@ class User(ModelSerializer):
 		password_validation.validate_password(password)
 		return password
 
-	def create(self, validated_data):
-		return models.User.objects.create_user(**validated_data)
 
-
-class UserProfile(ModelSerializer):
+class Profile(serializers.ModelSerializer):
 	"""Users' Profile info."""
 
-	# listings = ListingPreview(many=True, read_only=True)
+	user_id = serializers.PrimaryKeyRelatedField(read_only=True)
 
 	class Meta:
-		model = models.UserProfile
-		fields = '__all__'
-		read_only_fields = ('user', 'date_joined')
+		model = models.Profile
+		fields = (
+			'user_id', 'full_name', 'about',
+			'online', 'rating', 'avatar', 'location'
+		)
+		read_only_fields = ('user_id', 'online', 'rating', 'location')

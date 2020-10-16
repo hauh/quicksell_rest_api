@@ -1,11 +1,11 @@
 """Views."""
 
-from rest_framework import exceptions
+from rest_framework import exceptions, permissions
 from rest_framework.response import Response
 from rest_framework.generics import (
 	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
 )
-from quicksell_app import models, serializers, permissions
+from quicksell_app import models, serializers
 
 
 class UserList(ListAPIView):
@@ -15,33 +15,34 @@ class UserList(ListAPIView):
 	serializer_class = serializers.User
 
 
-class UserDetail(RetrieveAPIView):
-	"""Retrieve User."""
-
-	queryset = models.User.objects
-	serializer_class = serializers.User
-	lookup_field = 'id'
-
-	def retrieve(self, request, *args, **kwargs):
-		instance = self.get_object()
-		if not instance.is_active:
-			raise exceptions.NotFound()
-		serializer = self.get_serializer(instance)
-		return Response(serializer.data)
-
-
 class UserCreate(CreateAPIView):
 	"""Creates User."""
 
 	queryset = models.User.objects
 	serializer_class = serializers.User
-	permission_classes = ()
+	permission_classes = (permissions.AllowAny,)
 
 
-class UserUpdate(UpdateAPIView):
-	"""Updates User."""
+class ProfileDetail(RetrieveAPIView):
+	"""Retrieves User's Profile info."""
 
 	queryset = models.User.objects
-	serializer_class = serializers.User
-	permission_classes = (permissions.AccessProfile,)
-	lookup_field = 'username'
+	serializer_class = serializers.Profile
+	lookup_field = 'id'
+
+	def retrieve(self, request, *args, **kwargs):
+		user = self.get_object()
+		if not user.is_active:
+			raise exceptions.NotFound()
+		return Response(self.get_serializer(user.profile).data)
+
+
+class ProfileUpdate(UpdateAPIView):
+	"""Updates User's Profile info."""
+
+	http_method_names = ['patch', 'options']
+	serializer_class = serializers.Profile
+	permission_classes = (permissions.IsAuthenticated,)
+
+	def get_object(self):
+		return self.request.user.profile

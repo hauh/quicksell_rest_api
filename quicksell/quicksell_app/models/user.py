@@ -41,15 +41,20 @@ class User(AbstractBaseUser, PermissionsMixin):
 	objects = UserManager()
 
 	email = models.EmailField(
-		unique=True, null=False, blank=False,
-		error_messages={'unique': MESSAGES['not_unique']}
-	)
+		unique=True, error_messages={'unique': MESSAGES['not_unique']})
 	is_email_verified = models.BooleanField(default=False)
 	is_active = models.BooleanField(default=True)
 	is_staff = models.BooleanField(default=False)
 	is_superuser = models.BooleanField(default=False)
 	date_joined = models.DateTimeField(default=timezone.now)
 	balance = models.IntegerField(default=0)
+
+	@property
+	def profile(self):
+		try:
+			return self._profile
+		except Profile.DoesNotExist:
+			return Profile.objects.create(user=self)
 
 	def __str__(self):
 		if self.profile.full_name:
@@ -66,22 +71,19 @@ class User(AbstractBaseUser, PermissionsMixin):
 		super().clean()
 		self.email = User.objects.normalize_email(self.email)
 
-	def save(self, *args, **kwargs):
-		is_new = not self.pk
-		super().save(*args, **kwargs)
-		if is_new:
-			UserProfile.objects.create(user=self)
 
-
-class UserProfile(models.Model):
+class Profile(models.Model):
 	"""User profile info."""
 
 	user = models.OneToOneField(
-		User, on_delete=models.CASCADE, primary_key=True,
-		editable=False, related_name='profile'
+		User, related_name='_profile', primary_key=True, editable=False,
+		on_delete=models.CASCADE
 	)
 	full_name = models.CharField(max_length=100, blank=True)
+	about = models.TextField(blank=True)
 	online = models.BooleanField(default=True)
+	rating = models.IntegerField(default=0)
+	avatar = models.CharField(max_length=100, blank=True)
 	location = models.ForeignKey(
 		'Location', null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -101,4 +103,5 @@ class BusinessAccount(models.Model):
 
 	user = models.OneToOneField(
 		User, on_delete=models.CASCADE, related_name='business_account')
-	expires = models.DateTimeField(null=False)
+	is_active = models.BooleanField(default=False)
+	expires = models.DateTimeField(null=True, blank=True)

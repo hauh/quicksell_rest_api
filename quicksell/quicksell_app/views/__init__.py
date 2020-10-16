@@ -1,3 +1,3 @@
 """Views."""
 
-from .user import UserList, UserDetail, UserCreate, UserUpdate
+from .user import UserList, UserCreate, ProfileDetail, ProfileUpdate
