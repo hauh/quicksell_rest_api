@@ -21,6 +21,17 @@ class User(serializers.ModelSerializer):
 		password_validation.validate_password(password)
 		return password
 
+	def create(self, validated_data):
+		user = self.Meta.model.objects.create_user(**validated_data)
+		user.set_password(validated_data['password'])
+		user.save()
+		return user
+
+	def update(self, user, validated_data):
+		if password := validated_data.pop('password', None):
+			user.set_password(password)
+		return super().update(user, validated_data)
+
 
 class Profile(serializers.ModelSerializer):
 	"""Users' Profile info."""
