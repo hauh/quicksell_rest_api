@@ -46,7 +46,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 	is_active = models.BooleanField(default=True)
 	is_staff = models.BooleanField(default=False)
 	is_superuser = models.BooleanField(default=False)
-	date_joined = models.DateTimeField(default=timezone.now)
+	date_joined = models.DateTimeField(default=timezone.now, editable=False)
 	balance = models.IntegerField(default=0)
 
 	@property
@@ -83,12 +83,12 @@ class Profile(models.Model):
 	about = models.TextField(blank=True)
 	online = models.BooleanField(default=True)
 	rating = models.IntegerField(default=0)
-	avatar = models.CharField(max_length=100, blank=True)
+	avatar = models.ImageField(null=True, upload_to='images/avatars')
 	location = models.ForeignKey(
-		'Location', null=True, blank=True, on_delete=models.SET_NULL)
+		'Location', related_name='+', null=True, on_delete=models.SET_NULL)
 
 	def __str__(self):
-		return str(self.user)
+		return str(self.user) + "'s profile."
 
 
 class Location(models.Model):

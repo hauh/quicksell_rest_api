@@ -42,7 +42,6 @@ class ProfileUpdate(UpdateAPIView):
 
 	http_method_names = ['patch', 'options']
 	serializer_class = serializers.Profile
-	permission_classes = (permissions.IsAuthenticated,)
 
 	def get_object(self):
 		return self.request.user.profile
