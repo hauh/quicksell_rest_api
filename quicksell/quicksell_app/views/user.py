@@ -1,11 +1,14 @@
 """Views."""
 
-from rest_framework import exceptions, permissions
+from rest_framework import exceptions, permissions, status
 from rest_framework.response import Response
 from rest_framework.generics import (
 	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
 )
+from rest_framework.renderers import TemplateHTMLRenderer
+
 from quicksell_app import models, serializers
+from quicksell_app.utils import email_verification_token_generator
 
 
 class UserList(ListAPIView):
@@ -45,3 +48,25 @@ class ProfileUpdate(UpdateAPIView):
 
 	def get_object(self):
 		return self.request.user.profile
+
+
+class ConfirmEmail(RetrieveAPIView, CreateAPIView):
+	"""Checks Users' email confirmation link."""
+
+	queryset = models.User.objects
+	serializer_class = serializers.User
+	renderer_classes = (TemplateHTMLRenderer,)
+	template_name = 'confirm_email.html'
+	permission_classes = (permissions.AllowAny,)
+	lookup_field = 'uuid'
+
+	def get(self, *args, **kwargs):
+		return Response()
+
+	def post(self, request, uuid, token):
+		user = self.get_object()
+		if not email_verification_token_generator.check_token(user, token):
+			return Response(status=status.HTTP_404_NOT_FOUND)
+		user.is_email_verified = True
+		user.save()
+		return Response(status=status.HTTP_200_OK)

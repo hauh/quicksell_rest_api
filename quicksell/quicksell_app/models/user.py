@@ -1,5 +1,6 @@
 """User Models."""
 
+import uuid
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import (
@@ -40,6 +41,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 	objects = UserManager()
 
+	uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 	email = models.EmailField(
 		unique=True, error_messages={'unique': MESSAGES['not_unique']})
 	is_email_verified = models.BooleanField(default=False)

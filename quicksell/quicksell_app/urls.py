@@ -10,6 +10,8 @@ router = DefaultRouter()
 
 urlpatterns = router.urls + [
 	path(r'auth/', obtain_auth_token, name='auth'),
+	path(r'confirm-email/<uuid>/<token>',
+		views.ConfirmEmail.as_view(), name='email-confirm'),
 
 	path(r'users/', views.UserList.as_view(), name='user-list'),
 	path(r'users/new', views.UserCreate.as_view(), name='user-create'),

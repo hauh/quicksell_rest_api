@@ -127,7 +127,7 @@ STATIC_URL = '/static/'
 
 
 REST_FRAMEWORK = {
-	'DEFAULT_METADATA_CLASS': 'quicksell_app.metadata.NoMetadata',
+	'DEFAULT_METADATA_CLASS': 'quicksell_app.utils.NoMetadata',
 	'DEFAULT_PERMISSION_CLASSES': (
 		'rest_framework.permissions.IsAuthenticatedOrReadOnly',
 	),
@@ -141,3 +141,9 @@ REST_FRAMEWORK = {
 		'rest_framework.versioning.AcceptHeaderVersioning',
 	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
 }
+
+
+DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.com>'
+EMAIL_HOST = 'localhost'
+EMAIL_PORT = 1025
+EMAIL_USE_TLS = True
