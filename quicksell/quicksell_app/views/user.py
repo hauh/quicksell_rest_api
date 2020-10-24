@@ -6,6 +6,7 @@ from rest_framework.generics import (
 	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
 )
 from rest_framework.renderers import TemplateHTMLRenderer
+from rest_framework.schemas.openapi import AutoSchema
 
 from quicksell_app import models, serializers
 from quicksell_app.utils import email_verification_token_generator
@@ -51,7 +52,7 @@ class ProfileUpdate(UpdateAPIView):
 
 
 class ConfirmEmail(RetrieveAPIView, CreateAPIView):
-	"""Checks Users' email confirmation link."""
+	"""Checks User's email confirmation link."""
 
 	queryset = models.User.objects
 	serializer_class = serializers.User
@@ -59,6 +60,7 @@ class ConfirmEmail(RetrieveAPIView, CreateAPIView):
 	template_name = 'confirm_email.html'
 	permission_classes = (permissions.AllowAny,)
 	lookup_field = 'uuid'
+	schema = AutoSchema(operation_id_base="ConfirmEmail")
 
 	def get(self, *args, **kwargs):
 		return Response()
