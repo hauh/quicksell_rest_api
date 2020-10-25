@@ -32,6 +32,9 @@ class UserManager(BaseUserManager):
 		extra_fields['is_superuser'] = True
 		return self.create_user(email, password, **extra_fields)
 
+	def get_by_natural_key(self, email):
+		return self.get(email__iexact=email)
+
 
 class User(AbstractBaseUser, PermissionsMixin):
 	"""User model."""

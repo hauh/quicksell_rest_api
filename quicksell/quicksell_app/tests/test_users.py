@@ -95,6 +95,21 @@ class UsersTests(APITestCase):
 		self.assertIn('token', response.data)
 		self.client.credentials(HTTP_AUTHORIZATION='Token ' + response.data['token'])
 
+	def test_login_variations(self):
+		valid_username = self.test_create_user().email
+		for username in (
+			valid_username.upper(),
+			valid_username.lower(),
+			" " + valid_username,
+			"     " + valid_username,
+			valid_username + " ",
+			valid_username + "     "
+		):
+			request_data = {'username': username, 'password': self.good_pass}
+			response = self.client.post(self.url_auth, request_data)
+			self.assertEqual(response.status_code, status.HTTP_200_OK, username)
+			self.assertIn('token', response.data)
+
 	def test_confirm_email(self):
 		user = self.test_create_user()
 		self.assertFalse(user.is_email_verified)
