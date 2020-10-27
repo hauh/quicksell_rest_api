@@ -1,15 +1,17 @@
 """Views."""
 
-from rest_framework import exceptions, permissions, status
+from rest_framework import exceptions, permissions
 from rest_framework.response import Response
 from rest_framework.generics import (
-	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
-)
-from rest_framework.renderers import TemplateHTMLRenderer
-from rest_framework.schemas.openapi import AutoSchema
+	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView)
+from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 
 from quicksell_app import models, serializers
-from quicksell_app.utils import email_verification_token_generator
+from quicksell_app.utils import (
+	send_email_verification_link,
+	email_verification_token_generator,
+	base64_decode
+)
 
 
 class UserList(ListAPIView):
@@ -26,19 +28,23 @@ class UserCreate(CreateAPIView):
 	serializer_class = serializers.User
 	permission_classes = (permissions.AllowAny,)
 
+	def perform_create(self, serializer):
+		user = serializer.save()
+		send_email_verification_link(self.request, user)
+
 
 class ProfileDetail(RetrieveAPIView):
 	"""Retrieves User's Profile info."""
 
-	queryset = models.User.objects
+	queryset = models.Profile.objects
 	serializer_class = serializers.Profile
-	lookup_field = 'id'
+	lookup_field = 'uuid'
 
-	def retrieve(self, request, *args, **kwargs):
-		user = self.get_object()
-		if not user.is_active:
+	def retrieve(self, *args, **kwargs):
+		profile = self.get_object()
+		if not profile.user.is_active:
 			raise exceptions.NotFound()
-		return Response(self.get_serializer(user.profile).data)
+		return Response(self.get_serializer(profile).data)
 
 
 class ProfileUpdate(UpdateAPIView):
@@ -51,24 +57,23 @@ class ProfileUpdate(UpdateAPIView):
 		return self.request.user.profile
 
 
-class ConfirmEmail(RetrieveAPIView, CreateAPIView):
+class EmailConfirm(RetrieveAPIView, UpdateAPIView):
 	"""Checks User's email confirmation link."""
 
+	http_method_names = ['get', 'patch', 'options']
 	queryset = models.User.objects
 	serializer_class = serializers.User
-	renderer_classes = (TemplateHTMLRenderer,)
-	template_name = 'confirm_email.html'
+	renderer_classes = (JSONRenderer, TemplateHTMLRenderer)
 	permission_classes = (permissions.AllowAny,)
-	lookup_field = 'uuid'
-	schema = AutoSchema(operation_id_base="ConfirmEmail")
+	schema = None
 
 	def get(self, *args, **kwargs):
-		return Response()
+		return Response(template_name='confirm_email.html')
 
-	def post(self, request, uuid, token):
-		user = self.get_object()
+	def partial_update(self, request, base64email, token):
+		user = self.get_queryset().get_or_none(email=base64_decode(base64email))
 		if not email_verification_token_generator.check_token(user, token):
-			return Response(status=status.HTTP_404_NOT_FOUND)
+			raise exceptions.ValidationError()
 		user.is_email_verified = True
 		user.save()
-		return Response(status=status.HTTP_200_OK)
+		return Response()

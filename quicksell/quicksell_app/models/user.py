@@ -1,10 +1,13 @@
 """User Models."""
 
 import uuid
+from datetime import date, datetime
+
 from django.db import models
-from django.utils import timezone
 from django.contrib.auth.models import (
 	AbstractBaseUser, PermissionsMixin, BaseUserManager)
+
+from quicksell_app.utils import LowercaseEmailField
 
 
 MESSAGES = {
@@ -18,22 +21,24 @@ class UserManager(BaseUserManager):
 
 	use_in_migrations = True
 
-	def create_user(self, email, password, **extra_fields):
-		if not email or not password:
-			raise ValueError("Missing required field.")
-		email = self.normalize_email(email)
-		user = self.model(email=email, **extra_fields)
+	def create_user(self, password, **fields):
+		if not password:
+			raise ValueError("Password required.")
+		user = self.model(**fields)
 		user.set_password(password)
 		user.save()
 		return user
 
-	def create_superuser(self, email, password, **extra_fields):
-		extra_fields['is_staff'] = True
-		extra_fields['is_superuser'] = True
-		return self.create_user(email, password, **extra_fields)
+	def create_superuser(self, **fields):
+		fields['is_staff'] = True
+		fields['is_superuser'] = True
+		return self.create_user(**fields)
 
-	def get_by_natural_key(self, email):
-		return self.get(email__iexact=email)
+	def get_or_none(self, **kwargs):
+		try:
+			return self.get(**kwargs)
+		except self.model.DoesNotExist:
+			return None
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -44,14 +49,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 	objects = UserManager()
 
-	uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-	email = models.EmailField(
+	email = LowercaseEmailField(  # replace with CIEmailField on Postgres
 		unique=True, error_messages={'unique': MESSAGES['not_unique']})
 	is_email_verified = models.BooleanField(default=False)
 	is_active = models.BooleanField(default=True)
 	is_staff = models.BooleanField(default=False)
 	is_superuser = models.BooleanField(default=False)
-	date_joined = models.DateTimeField(default=timezone.now, editable=False)
+	date_joined = models.DateTimeField(default=datetime.now, editable=False)
 	balance = models.IntegerField(default=0)
 
 	@property
@@ -84,6 +88,8 @@ class Profile(models.Model):
 		User, related_name='_profile', primary_key=True, editable=False,
 		on_delete=models.CASCADE
 	)
+	uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+	date_created = models.DateField(default=date.today, editable=False)
 	full_name = models.CharField(max_length=100, blank=True)
 	about = models.TextField(blank=True)
 	online = models.BooleanField(default=True)

@@ -24,7 +24,7 @@
 				status.textContent = "Verifying email..."
 				
 				var xhr = new XMLHttpRequest();
-				xhr.open('POST', '', true);
+				xhr.open('PATCH', '', true);
 				xhr.setRequestHeader('Content-type', 'application/json');
 				xhr.onload = function() {
 					if (xhr.status == 200)

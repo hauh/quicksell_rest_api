@@ -3,6 +3,6 @@
 from .user import (
 	UserList, UserCreate,
 	ProfileDetail, ProfileUpdate,
-	ConfirmEmail
+	EmailConfirm
 )
 from .listing import ListingCreate

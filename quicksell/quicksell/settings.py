@@ -117,7 +117,7 @@ USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = True
+# USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
@@ -146,4 +146,4 @@ REST_FRAMEWORK = {
 DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.com>'
 EMAIL_HOST = 'localhost'
 EMAIL_PORT = 1025
-EMAIL_USE_TLS = True
+# EMAIL_USE_TLS = True
