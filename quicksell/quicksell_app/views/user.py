@@ -8,7 +8,7 @@ from django.core.mail import send_mail
 from rest_framework import exceptions, permissions, status
 from rest_framework.response import Response
 from rest_framework.generics import (
-	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView)
+	CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView, DestroyAPIView)
 from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.authtoken.models import Token
 
@@ -40,9 +40,21 @@ class UserCreate(CreateAPIView):
 		send_email_verification_link(self.request, user)
 
 
-class PasswordReset(UpdateAPIView):
+class PasswordUpdate(UpdateAPIView):
+	"""Changes User's password."""
+
+	http_method_names = ['put', 'options']
+	queryset = models.User.objects
+	serializer_class = serializers.PasswordUpdate
+
+	def get_object(self):
+		return self.request.user
+
+
+class PasswordReset(UpdateAPIView, DestroyAPIView):
 	"""Sends password reset code to email, then resets password with the code."""
 
+	http_method_names = ['patch', 'delete', 'options']
 	queryset = models.User.objects
 	serializer_class = serializers.PasswordReset
 	permission_classes = (permissions.AllowAny,)
@@ -76,7 +88,7 @@ class PasswordReset(UpdateAPIView):
 		self.send_mail(mail_text, data['email'])
 		return Response(status=status.HTTP_202_ACCEPTED)
 
-	def put(self, request, *args, **kwargs):
+	def delete(self, request, *args, **kwargs):
 		user, data = self.validate_request(request.data, partial=False)
 		if (not user or not user.password_reset_request_time
 		or user.password_reset_code != data['code']
@@ -133,10 +145,10 @@ class EmailConfirm(RetrieveAPIView, UpdateAPIView):
 	def get(self, *args, **kwargs):
 		return Response(template_name='confirm_email.html')
 
-	def partial_update(self, request, base64email, token):
+	def patch(self, request, base64email, token):
 		user = self.get_queryset().get_or_none(email=base64_decode(base64email))
 		if not email_verification_token_generator.check_token(user, token):
 			raise exceptions.ValidationError()
 		user.is_email_verified = True
 		user.save()
-		return Response()
+		return Response(status=status.HTTP_200_OK)

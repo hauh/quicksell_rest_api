@@ -15,9 +15,9 @@ urlpatterns = router.urls + [
 		path('new/', views.UserCreate.as_view(), name='user-create'),
 		path('email/<str:base64email>/<str:token>/',
 			views.EmailConfirm.as_view(), name='email-confirm'),
-		path('edit/', views.ProfileUpdate.as_view(), name='user-update'),
+		path('profile/', views.ProfileUpdate.as_view(), name='profile-update'),
 		path('password/', views.PasswordReset.as_view(), name='password-reset'),
-		path('<uuid>/', views.ProfileDetail.as_view(), name='user-detail'),
+		path('<uuid>/', views.ProfileDetail.as_view(), name='profile-detail'),
 	])),
 
 	path('listings/new', views.ListingCreate.as_view(), name='listing-create'),
