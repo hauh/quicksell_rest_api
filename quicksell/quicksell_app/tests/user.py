@@ -1,8 +1,11 @@
 """User testing."""
 
 from functools import partial
+from datetime import timedelta
 
 from django.urls import reverse
+from django.core import mail
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from model_bakery import baker
@@ -69,9 +72,11 @@ class TestUserCreation(BaseUserTest):
 			{'email': "test@bad_mail", 'password': "badpass"},
 			{'email': self.good_mail, 'password': "badpass"},
 			{'email': self.good_mail, 'password': ""},
+			{'email': self.good_mail, 'password': None},
 			{'email': self.good_mail},
 			{'email': "test@bad_mail", 'password': self.good_pass},
 			{'email': "", 'password': self.good_pass},
+			{'email': None, 'password': self.good_pass},
 			{'password': self.good_pass},
 		):
 			self.POST(self.url_user_create, status.HTTP_400_BAD_REQUEST, data)
@@ -124,6 +129,101 @@ class TestUserCreation(BaseUserTest):
 			response = self.GET(profile_url, status.HTTP_200_OK)
 			self.assertTupleEqual(tuple(response.data), self.profile_fields)
 		self.assertEqual(self.user_model.objects.count(), len(users))
+
+
+class TestPasswordReset(BaseUserTest):
+	"""Testing User's passsword reset."""
+
+	url_password_reset = reverse('password-reset')
+
+	def setUp(self):
+		super().setUp()
+		cache.clear()
+		self.make_user()
+
+	def test_invalid_email(self):
+		data = {'email': "invalid@mail"}
+		self.PATCH(self.url_password_reset, status.HTTP_400_BAD_REQUEST, data)
+
+	def test_unregistered_email(self):
+		data = {'email': "valid@mail.com"}
+		self.PATCH(self.url_password_reset, status.HTTP_202_ACCEPTED, data)
+		self.assertEqual(len(mail.outbox), 1)
+		email = mail.outbox[0]
+		self.assertEqual(email.to, [data['email']])
+		self.assertEqual(email.subject, "Quicksell Account Password Reset")
+		self.assertTrue(email.body.startswith("Someone requested to reset password"))
+
+	def test_valid_email(self):
+		data = {'email': self.user.email}
+		self.assertTrue(self.user.has_usable_password())
+		self.assertIsNone(self.user.password_reset_code)
+		self.assertIsNone(self.user.password_reset_request_time)
+		# requesting code
+		self.PATCH(self.url_password_reset, status.HTTP_202_ACCEPTED, data)
+		self.user.refresh_from_db()
+		self.assertIsNotNone(self.user.password_reset_code)
+		self.assertIsNotNone(self.user.password_reset_request_time)
+		# checking email
+		self.assertEqual(len(mail.outbox), 1)
+		email = mail.outbox[0]
+		self.assertEqual(email.to, [data['email']])
+		self.assertEqual(email.subject, "Quicksell Account Password Reset")
+		self.assertTrue(email.body.startswith("Enter this code in Quicksell app"))
+		code = int(email.body.split('\n')[1])
+		self.assertEqual(self.user.password_reset_code, code)
+		# reseting password
+		data |= {'code': code}
+		response = self.PUT(self.url_password_reset, status.HTTP_200_OK, data)
+		self.PUT(self.url_password_reset, status.HTTP_401_UNAUTHORIZED, data)
+		self.assertIn('token', response.data)
+		self.user.refresh_from_db()
+		self.assertFalse(self.user.has_usable_password())
+		self.assertIsNone(self.user.password_reset_code)
+		self.assertIsNone(self.user.password_reset_request_time)
+
+	def test_invalid_request(self):
+		# invalid data
+		for data in (
+			{'email': self.user.email, 'code': ""},
+			{'email': self.user.email, 'code': None},
+			{'email': self.user.email},
+			{'email': "invalid@mail", 'code': 111777},
+			{'code': 111777},
+		):
+			self.PUT(self.url_password_reset, status.HTTP_400_BAD_REQUEST, data)
+		cache.clear()
+		# request to reset before requesting code
+		data = {'email': self.user.email, 'code': 123123}
+		self.PUT(self.url_password_reset, status.HTTP_401_UNAUTHORIZED, data)
+		# wrong code
+		self.PATCH(self.url_password_reset, status.HTTP_202_ACCEPTED, data)
+		data['code'] = int(mail.outbox[0].body.split('\n')[1]) + 1
+		self.PUT(self.url_password_reset, status.HTTP_401_UNAUTHORIZED, data)
+		data['code'] -= 1
+		self.PUT(self.url_password_reset, status.HTTP_200_OK, data)
+		cache.clear()
+		# expired code
+		self.PATCH(self.url_password_reset, status.HTTP_202_ACCEPTED, data)
+		data['code'] = int(mail.outbox[0].body.split('\n')[1])
+		self.user.refresh_from_db()
+		self.user.password_reset_request_time -= timedelta(seconds=3601)
+		self.user.save()
+		self.PUT(self.url_password_reset, status.HTTP_401_UNAUTHORIZED, data)
+		# code without timestamp
+		self.PATCH(self.url_password_reset, status.HTTP_202_ACCEPTED, data)
+		data['code'] = int(mail.outbox[0].body.split('\n')[1])
+		self.user.password_reset_request_time = None
+		self.user.save()
+		self.PUT(self.url_password_reset, status.HTTP_401_UNAUTHORIZED, data)
+
+	def test_throttling(self):
+		hourly_limit = 6
+		for _ in range(hourly_limit):
+			self.PUT(self.url_password_reset, status.HTTP_400_BAD_REQUEST, {})
+		for _ in range(5):
+			self.PUT(self.url_password_reset, status.HTTP_429_TOO_MANY_REQUESTS, {})
+		self.assertEqual(len(mail.outbox), 0)
 
 
 class TestUserAuthentication(BaseUserTest):

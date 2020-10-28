@@ -141,7 +141,7 @@ REST_FRAMEWORK = {
 		'rest_framework.versioning.AcceptHeaderVersioning',
 	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
 	'DEFAULT_THROTTLE_RATES': {
-		'password_reset.day': '10/day',
+		'password_reset.day': '30/day',
 		'password_reset.hour': '6/hour'
 	}
 }

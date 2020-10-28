@@ -18,7 +18,7 @@ class BaseTest(APITestCase):
 
 	def make_request(self, request, url, expected_status, data):
 		response = request(url, data)
-		self.assertEqual(response.status_code, expected_status, url)
+		self.assertEqual(response.status_code, expected_status, (url, data))
 		return response
 
 	def GET(self, url, expected_status, data=None):
@@ -29,6 +29,9 @@ class BaseTest(APITestCase):
 
 	def PATCH(self, url, expected_status, data=None):
 		return self.make_request(self.client.patch, url, expected_status, data)
+
+	def PUT(self, url, expected_status, data=None):
+		return self.make_request(self.client.put, url, expected_status, data)
 
 	def field_by_field_compare(self, response_data, obj, fields):
 		for field in fields:
