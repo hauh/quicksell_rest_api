@@ -1,4 +1,4 @@
 """Serializers."""
 
-from .user import User, Profile
+from .user import User, Profile, PasswordReset
 from .listing import Listing

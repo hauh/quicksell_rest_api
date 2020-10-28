@@ -9,7 +9,7 @@ from model_bakery import baker
 
 from quicksell_app.models import Profile
 from quicksell_app.serializers import Profile as profile_serializer
-from quicksell_app.utils import (
+from quicksell_app.misc import (
 	base64_encode, email_verification_token_generator)
 
 from .basetest import BaseTest

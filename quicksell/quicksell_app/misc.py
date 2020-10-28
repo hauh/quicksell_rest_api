@@ -1,21 +1,13 @@
 """Miscellaneous useful stuff."""
 
 from django.urls import reverse
-from django.db.models import EmailField
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import smart_bytes, smart_str
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+
 from rest_framework.metadata import BaseMetadata
-
-
-class LowercaseEmailField(EmailField):
-	"""Case-insensitive email field."""
-
-	def to_python(self, value):
-		if not isinstance(value, str):
-			return value
-		return value.lower()
+from rest_framework.throttling import UserRateThrottle
 
 
 class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
@@ -33,6 +25,16 @@ class NoMetadata(BaseMetadata):
 			"This API is used with Quicksell App. "
 			"Check it on App Store or Google Play!"
 		)
+
+
+class PasswordResetDaily(UserRateThrottle):
+	"""Rate limit on password reset endpoint per day."""
+	scope = 'password_reset.day'
+
+
+class PasswordResetHourly(UserRateThrottle):
+	"""Rate limit on password reset endpoint per hour."""
+	scope = 'password_reset.hour'
 
 
 def base64_encode(string):

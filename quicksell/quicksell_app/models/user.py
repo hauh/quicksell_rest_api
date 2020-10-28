@@ -64,6 +64,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 	date_joined = DateTimeField(default=datetime.now, editable=False)
 	balance = IntegerField(default=0)
 	password_reset_code = IntegerField(null=True)
+	password_reset_request_time = DateTimeField(null=True)
 
 	@property
 	def profile(self):

@@ -127,7 +127,7 @@ STATIC_URL = '/static/'
 
 
 REST_FRAMEWORK = {
-	'DEFAULT_METADATA_CLASS': 'quicksell_app.utils.NoMetadata',
+	'DEFAULT_METADATA_CLASS': 'quicksell_app.misc.NoMetadata',
 	'DEFAULT_PERMISSION_CLASSES': (
 		'rest_framework.permissions.IsAuthenticatedOrReadOnly',
 	),
@@ -140,6 +140,10 @@ REST_FRAMEWORK = {
 	'DEFAULT_VERSIONING_CLASS':
 		'rest_framework.versioning.AcceptHeaderVersioning',
 	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+	'DEFAULT_THROTTLE_RATES': {
+		'password_reset.day': '10/day',
+		'password_reset.hour': '6/hour'
+	}
 }
 
 

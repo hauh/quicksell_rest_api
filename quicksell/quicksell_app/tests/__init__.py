@@ -10,4 +10,6 @@ from .user import (
 
 settings.PASSWORD_HASHERS = ('django.contrib.auth.hashers.MD5PasswordHasher',)
 baker.generators.add(
-	'quicksell_app.utils.LowercaseEmailField', baker.random_gen.gen_email)
+	'quicksell_app.models.user.LowercaseEmailField',
+	baker.random_gen.gen_email
+)

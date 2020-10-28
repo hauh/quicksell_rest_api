@@ -16,6 +16,7 @@ urlpatterns = router.urls + [
 		path('email/<str:base64email>/<str:token>/',
 			views.EmailConfirm.as_view(), name='email-confirm'),
 		path('edit/', views.ProfileUpdate.as_view(), name='user-update'),
+		path('password/', views.PasswordReset.as_view(), name='password-reset'),
 		path('<uuid>/', views.ProfileDetail.as_view(), name='user-detail'),
 	])),
 

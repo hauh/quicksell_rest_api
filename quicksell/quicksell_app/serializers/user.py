@@ -1,5 +1,6 @@
 """User serilaizers."""
 
+
 from django.contrib.auth import password_validation
 from rest_framework import serializers
 from quicksell_app import models
@@ -25,6 +26,13 @@ class User(serializers.ModelSerializer):
 		if password := validated_data.pop('password', None):
 			user.set_password(password)
 		return super().update(user, validated_data)
+
+
+class PasswordReset(serializers.Serializer):
+	"""Reset password with code from email."""
+
+	email = serializers.EmailField()
+	code = serializers.IntegerField()
 
 
 class Profile(serializers.ModelSerializer):
