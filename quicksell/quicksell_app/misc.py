@@ -52,7 +52,7 @@ def send_email_verification_link(request, user):
 	))
 	verification_link = request.build_absolute_uri(url_path)
 	send_mail(
-		"Activate your Quicksell account",
+		"Activate Your Quicksell Account",
 		"Click the link to confirm your email:\n" + verification_link,
 		None, recipient_list=[user.email]
 	)

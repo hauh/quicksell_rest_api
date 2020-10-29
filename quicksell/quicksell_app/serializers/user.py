@@ -3,6 +3,7 @@
 
 from django.contrib.auth import password_validation
 from rest_framework import serializers, exceptions
+from rest_framework.authtoken.models import Token
 from quicksell_app import models
 
 
@@ -23,15 +24,11 @@ class User(serializers.ModelSerializer):
 		return self.Meta.model.objects.create_user(**validated_data)
 
 
-class PasswordUpdate(serializers.ModelSerializer):
+class PasswordUpdate(serializers.Serializer):
 	"""Change User's password."""
 
-	old_password = serializers.CharField(
-		source='password', required=False, read_only=True)
-	new_password = serializers.CharField(source='password', write_only=True)
-
-	class Meta:
-		model = models.User
+	old_password = serializers.CharField(write_only=True)
+	new_password = serializers.CharField(write_only=True)
 
 	def validate_old_password(self, password):
 		if self.instance.has_usable_password():
@@ -45,6 +42,8 @@ class PasswordUpdate(serializers.ModelSerializer):
 
 	def update(self, user, validated_data):
 		user.set_password(validated_data['new_password'])
+		user.save()
+		Token.objects.filter(user=user).delete()
 		return user
 
 
