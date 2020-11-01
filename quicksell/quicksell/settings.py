@@ -141,13 +141,13 @@ REST_FRAMEWORK = {
 		'rest_framework.versioning.AcceptHeaderVersioning',
 	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
 	'DEFAULT_THROTTLE_RATES': {
-		'password_reset.day': '30/day',
-		'password_reset.hour': '6/hour'
-	}
+		'password_reset.day': '50/day',
+		'password_reset.hour': '15/hour'
+	},
 }
 
 
-DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.com>'
+DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.ru>'
 EMAIL_HOST = 'localhost'
 EMAIL_PORT = 1025
 # EMAIL_USE_TLS = True
