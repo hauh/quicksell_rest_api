@@ -6,14 +6,14 @@ ADDRESS="0.0.0.0:7777"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-echo "Stopping server..."
-kill $(cat app.pid)
-rm -rf venv
-
 echo "Preparing environment..."
-$PYTHON -m venv venv &&
+kill $(cat app.pid)
+if [[ $(find requirements.txt -mmin -1) ]]; then
+	rm -rf venv
+	$PYTHON -m venv venv
+fi
 source venv/bin/activate &&
-$PYTHON -m pip install -r requirements.txt 1>/dev/null
+$PYTHON -m pip install -r requirements.txt --use-feature=2020-resolver 1>/dev/null
 
 echo "Making migrations..."
 $PYTHON quicksell/manage.py makemigrations 1>/dev/null

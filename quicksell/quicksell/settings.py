@@ -158,7 +158,7 @@ EMAIL_PORT = 1025
 SWAGGER_SETTINGS = {
 	'SECURITY_DEFINITIONS': {
 		'Token': {
-			'type': 'token',
+			'type': 'apiKey',
 			'name': 'Authorization',
 			'in': 'header'
 		}
