@@ -12,6 +12,7 @@ inflection==0.5.1
 itypes==1.2.0
 Jinja2==2.11.2
 MarkupSafe==1.1.1
+model-bakery==1.2.0
 packaging==20.4
 Pillow==8.0.1
 pyparsing==2.4.7

@@ -5,13 +5,14 @@ from uuid import UUID
 
 from django.core.files import File
 from rest_framework.test import APITestCase
+from rest_framework.authtoken.models import Token
 from model_bakery import baker
 
 from quicksell_app.models import User
 
 
 class BaseTest(APITestCase):
-	"""Base class for testing."""
+	"""Base class for API tests."""
 
 	user_model = User
 	user = None
@@ -27,11 +28,14 @@ class BaseTest(APITestCase):
 	def POST(self, url, expected_status, data=None):
 		return self.make_request(self.client.post, url, expected_status, data)
 
+	def PUT(self, url, expected_status, data=None):
+		return self.make_request(self.client.put, url, expected_status, data)
+
 	def PATCH(self, url, expected_status, data=None):
 		return self.make_request(self.client.patch, url, expected_status, data)
 
-	def PUT(self, url, expected_status, data=None):
-		return self.make_request(self.client.put, url, expected_status, data)
+	def DELETE(self, url, expected_status, data=None):
+		return self.make_request(self.client.delete, url, expected_status, data)
 
 	def field_by_field_compare(self, response_data, obj, fields):
 		for field in fields:
@@ -56,3 +60,7 @@ class BaseTest(APITestCase):
 		db_user = User.objects.get(id=self.user.id)
 		db_user.set_password(self.user.password)
 		db_user.save()
+
+	def authorize(self):
+		token = baker.make(Token, user=self.user)
+		self.client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
