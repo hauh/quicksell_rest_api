@@ -42,7 +42,9 @@ INSTALLED_APPS = [
 
 	'rest_framework',
 	'rest_framework.authtoken',
-	'quicksell_app'
+	'drf_yasg',
+
+	'quicksell_app',
 ]
 
 MIDDLEWARE = [
@@ -151,3 +153,14 @@ DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.ru>'
 EMAIL_HOST = 'localhost'
 EMAIL_PORT = 1025
 # EMAIL_USE_TLS = True
+
+
+SWAGGER_SETTINGS = {
+	'SECURITY_DEFINITIONS': {
+		'Token': {
+			'type': 'token',
+			'name': 'Authorization',
+			'in': 'header'
+		}
+	}
+}

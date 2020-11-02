@@ -1,14 +1,32 @@
 """Endpoints."""
 
 from django.urls import path, include
+
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
+
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+
 from quicksell_app import views
 
+
+schema_view = get_schema_view(
+	openapi.Info(
+		title="Quicksell API",
+		default_version='v1',
+		license=openapi.License(name="Proprietary"),
+	),
+	public=True,
+)
 
 router = DefaultRouter()
 
 urlpatterns = router.urls + [
+	path('doc/', include([
+		path('redoc/', schema_view.with_ui('redoc'), name='schema-redoc'),
+		path('swagger/', schema_view.with_ui('swagger'), name='schema-swagger'),
+	])),
 	path('users/', include([
 		path('', views.UserList.as_view(), name='user-list'),  # GET
 		path('login/', obtain_auth_token, name='login'),  # POST

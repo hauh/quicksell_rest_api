@@ -8,7 +8,7 @@ from django.contrib.auth import password_validation
 from django.core.mail import send_mail as django_send_mail
 
 from rest_framework.serializers import (
-	Serializer, CharField, EmailField, IntegerField)
+	Serializer, CharField, EmailField, IntegerField, SerializerMethodField)
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -68,6 +68,7 @@ class ResetRequestSerializer(Serializer):
 class ResetPerformSerializer(Serializer):
 	email = EmailField(write_only=True)
 	code = IntegerField(write_only=True)
+	token = SerializerMethodField()
 
 	def update(self, user, _validated_data):
 		user.password_reset_code = None
@@ -77,21 +78,27 @@ class ResetPerformSerializer(Serializer):
 			user.auth_token.delete()
 		except Token.DoesNotExist:
 			pass
-		Token.objects.create(user=user)
 		user.save()
 		return user
+
+	def get_token(self, user):
+		Token.objects.create(user=user)
+		return str(user.auth_token)
 
 
 class PasswordUpdate(GenericAPIView):
 	"""
 	Change password of a User.
 
-	PUT: change password (requires authorization)
-		old_password: str, new_password: str
-	POST: request password reset
-		email: str
-	DELETE: reset password
-		email: str, code: int -> token: str
+	put:
+	Update User's password. Old password is required if it wasn't reset.
+
+	post:
+	Request password reset code to be sent to provided email.
+
+	delete:
+	Make User's password unusable if code and email are correct.
+	Returns new authorization token to set new password with PUT.
 	"""
 
 	queryset = User.objects
@@ -152,7 +159,7 @@ class PasswordUpdate(GenericAPIView):
 			raise PermissionDenied("Code expired.")
 		serializer.save()
 		self.send_mail(MESSAGES['reset'], user.email)
-		return Response({'token': str(user.auth_token)}, status=HTTP_200_OK)
+		return Response(serializer.data, status=HTTP_200_OK)
 
 	@staticmethod
 	def send_mail(message, address):
