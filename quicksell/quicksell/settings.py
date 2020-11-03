@@ -162,5 +162,7 @@ SWAGGER_SETTINGS = {
 			'name': 'Authorization',
 			'in': 'header'
 		}
-	}
+	},
+	'DEFAULT_AUTO_SCHEMA_CLASS': 'quicksell_app.schema.FilteringFieldsAutoSchema',
+	'DEFAULT_INFO': 'quicksell_app.schema.schema_info'
 }

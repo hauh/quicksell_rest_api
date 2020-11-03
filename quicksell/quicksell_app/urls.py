@@ -5,20 +5,9 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
-
 from quicksell_app import views
+from quicksell_app.schema import schema_view
 
-
-schema_view = get_schema_view(
-	openapi.Info(
-		title="Quicksell API",
-		default_version='v1',
-		license=openapi.License(name="Proprietary"),
-	),
-	public=True,
-)
 
 router = DefaultRouter()
 
