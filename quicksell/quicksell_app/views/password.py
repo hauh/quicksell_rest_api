@@ -1,5 +1,4 @@
 """Change and reset password."""
-# pylint: disable=missing-class-docstring
 
 from random import randint
 from datetime import datetime
@@ -13,8 +12,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.response import Response
-from rest_framework.status import HTTP_200_OK, HTTP_202_ACCEPTED
+from rest_framework.status import (
+	HTTP_200_OK, HTTP_202_ACCEPTED, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN)
 from rest_framework.authtoken.models import Token
+
+from drf_yasg.utils import swagger_auto_schema
 
 from quicksell_app.models import User
 from quicksell_app.misc import PasswordResetDaily, PasswordResetHourly
@@ -37,7 +39,19 @@ MESSAGES = {
 }
 
 
+class ResetRequestSerializer(Serializer):
+	"""POST"""
+	email = EmailField(write_only=True)
+
+	def update(self, user, _validated_data):
+		user.password_reset_code = randint(100000, 999999)
+		user.password_reset_request_time = datetime.now()
+		user.save()
+		return user
+
+
 class PasswordChangeSerializer(Serializer):
+	"""PUT"""
 	old_password = CharField(write_only=True, required=False)
 	new_password = CharField(write_only=True)
 
@@ -55,17 +69,8 @@ class PasswordChangeSerializer(Serializer):
 		return user
 
 
-class ResetRequestSerializer(Serializer):
-	email = EmailField(write_only=True)
-
-	def update(self, user, _validated_data):
-		user.password_reset_code = randint(100000, 999999)
-		user.password_reset_request_time = datetime.now()
-		user.save()
-		return user
-
-
 class ResetPerformSerializer(Serializer):
+	"""DELETE"""
 	email = EmailField(write_only=True)
 	code = IntegerField(write_only=True)
 	token = SerializerMethodField()
@@ -86,20 +91,8 @@ class ResetPerformSerializer(Serializer):
 		return str(user.auth_token)
 
 
-class PasswordUpdate(GenericAPIView):
-	"""
-	Change password of a User.
-
-	put:
-	Update User's password. Old password is required if it wasn't reset.
-
-	post:
-	Request password reset code to be sent to provided email.
-
-	delete:
-	Make User's password unusable if code and email are correct.
-	Returns new authorization token to set new password with PUT.
-	"""
+class Password(GenericAPIView):
+	"""Change password of a User."""
 
 	queryset = User.objects
 	throttle_classes = (PasswordResetDaily, PasswordResetHourly)
@@ -130,16 +123,16 @@ class PasswordUpdate(GenericAPIView):
 		serializer.instance = self.get_object()
 		return serializer
 
-	def put(self, request, *args, **kwargs):
-		serializer = self.validate_request(request.data)
-		if serializer.instance.has_usable_password():  # if it has not been reset
-			old_pass = serializer.validated_data.get('old_password')
-			if not old_pass or not serializer.instance.check_password(old_pass):
-				raise AuthenticationFailed("Wrong password.")
-		serializer.save()
-		self.send_mail(MESSAGES['changed'], serializer.instance.email)
-		return Response(status=HTTP_200_OK)
-
+	@swagger_auto_schema(
+		operation_id='password-reset-request',
+		operation_summary="Request reset User's password",
+		operation_description=(
+			"Notification mail will be sent to the email, "
+			"with password reset code if user exists."
+		),
+		security=[],
+		responses={HTTP_202_ACCEPTED: "Email will be sent shortly."}
+	)
 	def post(self, request, *args, **kwargs):
 		serializer = self.validate_request(request.data)
 		if serializer.instance:
@@ -150,11 +143,48 @@ class PasswordUpdate(GenericAPIView):
 		self.send_mail(msg, serializer.validated_data['email'])
 		return Response(status=HTTP_202_ACCEPTED)
 
+	@swagger_auto_schema(
+		operation_id='password-update',
+		operation_summary="Change User's password",
+		operation_description=(
+			"Old password is required "
+			"if it wasn't reset before with DELETE method."
+		),
+		responses={
+			HTTP_200_OK: "Password changed.",
+			HTTP_401_UNAUTHORIZED: "Wrong password.",
+		}
+	)
+	def put(self, request, *args, **kwargs):
+		serializer = self.validate_request(request.data)
+		if serializer.instance.has_usable_password():
+			old_pass = serializer.validated_data.get('old_password')
+			if not old_pass or not serializer.instance.check_password(old_pass):
+				raise AuthenticationFailed("Wrong password.")
+		serializer.save()
+		self.send_mail(MESSAGES['changed'], serializer.instance.email)
+		return Response(status=HTTP_200_OK)
+
+	@swagger_auto_schema(
+		operation_id='password-reset',
+		operation_summary="Reset User's password",
+		operation_description=(
+			"If code matches email and it hasn't expired, User's password "
+			"will become unusable and new authentication token will be present "
+			"in reponse. Set new password with PUT method."
+		),
+		security=[],
+		responses={
+			HTTP_200_OK: ResetPerformSerializer,
+			HTTP_401_UNAUTHORIZED: "Wrong code or email not found.",
+			HTTP_403_FORBIDDEN: "Code expired."
+		}
+	)
 	def delete(self, request, *args, **kwargs):
 		serializer = self.validate_request(request.data)
 		user = serializer.instance
 		if not user or user.password_reset_code != serializer.validated_data['code']:
-			raise AuthenticationFailed("Wrong email and/or code.")
+			raise AuthenticationFailed("Wrong code or email not found.")
 		if (datetime.now() - user.password_reset_request_time).seconds > CODE_EXPIRY:
 			raise PermissionDenied("Code expired.")
 		serializer.save()

@@ -5,5 +5,5 @@ from .user import (
 	ProfileDetail, ProfileUpdate,
 	EmailConfirm
 )
-from .password import PasswordUpdate
+from .password import Password
 from .listing import ListingCreate

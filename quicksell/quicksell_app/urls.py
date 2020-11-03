@@ -20,7 +20,7 @@ urlpatterns = router.urls + [
 		path('', views.UserList.as_view(), name='user-list'),  # GET
 		path('login/', obtain_auth_token, name='login'),  # POST
 		# path('logout/', name='logout'),  # DELETE
-		path('password/', views.PasswordUpdate.as_view(), name='password-update'),  # PUT, POST, DELETE  # noqa:E501
+		path('password/', views.Password.as_view(), name='password-update'),  # PUT, POST, DELETE  # noqa:E501
 		path('email/', include([
 			# path('', views.EmailUpdate.as_view(), name='email-update'),  # PATCH
 			path('confirm/<str:base64email>/<str:token>/',
