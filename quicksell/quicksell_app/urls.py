@@ -23,8 +23,11 @@ urlpatterns = router.urls + [
 		path('password/', views.Password.as_view(), name='password'),  # PUT, POST, DELETE  # noqa:E501
 		path('email/<str:base64email>/<str:token>/',
 			views.EmailConfirm.as_view(), name='email-confirm'),  # GET, PATCH
-		path('profile/', views.ProfileUpdate.as_view(), name='profile-update'),  # PATCH  # noqa:E501
-		path('<uuid>/', views.ProfileDetail.as_view(), name='profile-detail'),  # GET
+	])),
+	path('profiles/', include([
+		path('', views.Profile.as_view(), name='profile'),  # GET, PATCH
+		path('<str:base64uuid>/',
+			views.ProfileDetail.as_view(), name='profile-detail'),  # GET
 	])),
 	path('listings/', include([
 		path('new/', views.ListingCreate.as_view(), name='listing-create'),  # POST

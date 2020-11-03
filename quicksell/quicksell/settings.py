@@ -146,6 +146,8 @@ REST_FRAMEWORK = {
 		'password_reset.day': '50/day',
 		'password_reset.hour': '15/hour'
 	},
+	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+	'PAGE_SIZE': 10
 }
 
 

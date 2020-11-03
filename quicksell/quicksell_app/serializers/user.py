@@ -1,6 +1,8 @@
 """User serilaizers."""
 
+from django.utils.http import urlsafe_base64_encode
 from django.contrib.auth import password_validation
+
 from rest_framework import serializers
 from quicksell_app import models
 
@@ -32,3 +34,8 @@ class Profile(serializers.ModelSerializer):
 			'online', 'rating', 'avatar', 'location'
 		)
 		read_only_fields = ('uuid', 'date_created', 'online', 'rating', 'location')
+
+	def to_representation(self, profile):
+		representation = super().to_representation(profile)
+		representation['uuid'] = urlsafe_base64_encode(profile.uuid.bytes)
+		return representation

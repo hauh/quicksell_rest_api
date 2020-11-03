@@ -63,8 +63,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 	is_superuser = BooleanField(default=False)
 	date_joined = DateTimeField(default=datetime.now, editable=False)
 	balance = IntegerField(default=0)
-	password_reset_code = IntegerField(null=True)
-	password_reset_request_time = DateTimeField(null=True)
+	password_reset_code = IntegerField(null=True, blank=True)
+	password_reset_request_time = DateTimeField(null=True, blank=True)
 
 	@property
 	def profile(self):
@@ -78,10 +78,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 			return f"{self.email} ({self.profile.full_name})"
 		return self.email
 
-	def has_perm(self, perm, obj=None):
+	def has_perm(self, _perm, _obj=None):
 		return self.is_staff
 
-	def has_module_perms(self, app_label):
+	def has_module_perms(self, _app_label):
 		return self.is_staff
 
 	def clean(self):
@@ -102,9 +102,9 @@ class Profile(QuicksellModel):
 	about = TextField(blank=True)
 	online = BooleanField(default=True)
 	rating = IntegerField(default=0)
-	avatar = ImageField(null=True, upload_to='images/avatars')
+	avatar = ImageField(null=True, blank=True, upload_to='images/avatars')
 	location = ForeignKey(
-		'Location', related_name='+', null=True, on_delete=SET_NULL)
+		'Location', related_name='+', null=True, blank=True, on_delete=SET_NULL)
 
 	def __str__(self):
 		return str(self.user) + "'s profile."

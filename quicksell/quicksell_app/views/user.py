@@ -3,7 +3,6 @@
 from django.urls import reverse
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import smart_bytes, smart_str
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -49,7 +48,7 @@ class User(GenericAPIView):
 		serializer.save()
 		email = serializer.validated_data['email']
 		url_path = reverse('email-confirm', args=(
-			urlsafe_base64_encode(smart_bytes(email)),
+			urlsafe_base64_encode(email.encode()),
 			token_generator.make_token(serializer.instance)
 		))
 		verification_link = request.build_absolute_uri(url_path)
@@ -80,7 +79,7 @@ class EmailConfirm(GenericAPIView):
 		return Response(template_name='confirm_email.html')
 
 	def patch(self, _request, base64email, token):
-		email = smart_str(urlsafe_base64_decode(base64email))
+		email = urlsafe_base64_decode(base64email).decode()
 		user = self.get_queryset().get_or_none(email=email)
 		if not token_generator.check_token(user, token):
 			raise ValidationError()
