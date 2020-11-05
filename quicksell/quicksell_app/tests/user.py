@@ -1,18 +1,22 @@
 """User testing."""
 
 from functools import partial
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.urls import reverse
 from django.core import mail
-from django.conf import settings
 from django.core.cache import cache
 
-from rest_framework import status
+from rest_framework.status import (
+	HTTP_200_OK, HTTP_201_CREATED, HTTP_202_ACCEPTED,
+	HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN,
+	HTTP_404_NOT_FOUND, HTTP_429_TOO_MANY_REQUESTS
+)
 from model_bakery import baker
 
-from quicksell_app.models import Profile
-from quicksell_app.serializers import Profile as profile_serializer
+from quicksell_app.models import Profile as profile_model
+from quicksell_app.serializers import (
+	User as user_serializer, Profile as profile_serializer)
 
 from .basetest import BaseTest
 
@@ -20,24 +24,15 @@ from .basetest import BaseTest
 class BaseUserTest(BaseTest):
 	"""Common things for endpoints at `api/users/`."""
 
-	profile_model = Profile
-
-	url_user_create = reverse('user-create')
-	url_auth = reverse('login')
-	url_user_profile = partial(reverse, 'profile-detail')
-	url_password_update = reverse('password-update')
-	url_profile_update = reverse('profile-update')
-
-	emails_from = settings.DEFAULT_FROM_EMAIL
+	url_user = reverse('user')
+	url_login = reverse('login')
+	url_password = reverse('password')
+	url_profile = reverse('profile')
+	url_profile_detail = partial(reverse, 'profile-detail')
 
 	good_mail = "test@good.mail"
 	good_pass = "!@34GoodPass"
-
-	user_fields = ('email', 'is_email_verified', 'date_joined', 'balance')
-	profile_fields = (
-		'uuid', 'date_created', 'full_name', 'about',
-		'online', 'rating', 'avatar', 'location'
-	)
+	good_pass2 = "New$#21Pass"
 
 	def valid_email_variants(self, email):
 		for variant in (
@@ -52,17 +47,41 @@ class BaseUserTest(BaseTest):
 			yield variant
 
 
+class TestAuthentication(BaseUserTest):
+	"""POST api/users/login/"""
+
+	def setUp(self):
+		super().setUp()
+		self.make_user()
+
+	def test_authenticate(self):
+		for username in self.valid_email_variants(self.user.email):
+			data = {'username': username, 'password': self.user_pass}
+			response = self.POST(self.url_login, HTTP_200_OK, data)
+			self.assertIn('token', response.data)
+			self.user.refresh_from_db(fields=('auth_token',))
+			self.assertEqual(str(self.user.auth_token), response.data['token'])
+
+	def test_invalid_credentials(self):
+		for data in (
+			{'username': self.user.email, 'password': "wrong pass"},
+			{'username': "email@doesn't.exist", 'password': self.user.password},
+			{'username': self.user.email},
+		):
+			response = self.POST(self.url_login, HTTP_400_BAD_REQUEST, data)
+			self.assertNotIn('token', response.data)
+
+
 class TestUserCreation(BaseUserTest):
-	"""api/users/new/"""
+	"""POST, GET api/users/"""
 
 	def test_create_user(self):
 		self.assertEqual(self.user_model.objects.count(), 0)
 		data = {'email': self.good_mail, 'password': self.good_pass}
-		response = self.POST(self.url_user_create, status.HTTP_201_CREATED, data)
+		response = self.POST(self.url_user, HTTP_201_CREATED, data)
 		self.assertEqual(self.user_model.objects.count(), 1)
-		self.assertTupleEqual(tuple(response.data), self.user_fields)
 		user = self.user_model.objects.get(email=response.data['email'])
-		self.field_by_field_compare(response.data, user, self.user_fields)
+		self.assertDictEqual(response.data, user_serializer(user).data)
 		# checking email confirmation
 		self.assertEqual(len(mail.outbox), 1)
 		email = mail.outbox[0]
@@ -83,85 +102,77 @@ class TestUserCreation(BaseUserTest):
 			{'email': None, 'password': self.good_pass},
 			{'password': self.good_pass},
 		):
-			self.POST(self.url_user_create, status.HTTP_400_BAD_REQUEST, data)
+			self.POST(self.url_user, HTTP_400_BAD_REQUEST, data)
 			self.assertEqual(self.user_model.objects.count(), 0)
 
 	def test_duplicate_email(self):
 		self.make_user()
 		for email in self.valid_email_variants(self.user.email):
 			data = {'email': email, 'password': self.good_pass}
-			self.POST(self.url_user_create, status.HTTP_400_BAD_REQUEST, data)
+			self.POST(self.url_user, HTTP_400_BAD_REQUEST, data)
 			self.assertEqual(self.user_model.objects.count(), 1)
+
+	def test_get_self_account(self):
+		self.make_user()
+		# who are you?
+		response = self.GET(self.url_user, HTTP_401_UNAUTHORIZED)
+		self.assertIn('detail', response.data)
+		response.data.pop('detail')
+		self.assertFalse(response.data)
+		# set token and check again
+		self.authorize()
+		response = self.GET(self.url_user, HTTP_200_OK)
+		self.assertDictEqual(response.data, user_serializer(self.user).data)
+
+
+class TestEmailConfirmation(BaseUserTest):
+	"""GET, PATCH api/users/password/"""
 
 	def test_confirm_email(self):
 		# registering new user
 		data = {'email': self.good_mail, 'password': self.good_pass}
-		response = self.POST(self.url_user_create, status.HTTP_201_CREATED, data)
+		response = self.POST(self.url_user, HTTP_201_CREATED, data)
+		self.assertIn('email', response.data)
 		user = self.user_model.objects.get(email=response.data['email'])
 		self.assertFalse(user.is_email_verified)
 		confirm_email_url = mail.outbox[0].body.split('\n')[1]
 		# GET confirmation page
-		self.GET(confirm_email_url, status.HTTP_200_OK)
+		self.GET(confirm_email_url, HTTP_200_OK)
 		# PATCH from that page (invalid token)
-		self.PATCH(confirm_email_url[:-2] + '/', status.HTTP_400_BAD_REQUEST)
+		self.PATCH(confirm_email_url[:-2] + '/', HTTP_400_BAD_REQUEST)
 		# PATCH from that page (valid token)
-		self.PATCH(confirm_email_url, status.HTTP_200_OK)
+		self.PATCH(confirm_email_url, HTTP_200_OK)
 		user.refresh_from_db()
 		self.assertTrue(user.is_email_verified)
-		# token is no longer valid
-		self.PATCH(confirm_email_url, status.HTTP_400_BAD_REQUEST)
-
-	def test_view_profile(self):
-		self.make_user()
-		profile = self.user.profile
-		profile_url = self.url_user_profile(args=(profile.uuid,))
-		response = self.GET(profile_url, status.HTTP_200_OK)
-		self.assertTupleEqual(tuple(response.data), self.profile_fields)
-		self.field_by_field_compare(response.data, profile, self.profile_fields)
-
-	def test_create_many_users(self):
-		users = baker.prepare(self.user_model, _quantity=100)
-		for user in users:
-			# create user
-			data = {'email': user.email, 'password': user.password}
-			response = self.POST(self.url_user_create, status.HTTP_201_CREATED, data)
-			self.assertTupleEqual(tuple(response.data), self.user_fields)
-			# confirm email
-			confirm_email_url = mail.outbox[-1].body.split('\n')[1]
-			self.GET(confirm_email_url, status.HTTP_200_OK)
-			self.PATCH(confirm_email_url, status.HTTP_200_OK)
-		self.assertEqual(self.user_model.objects.count(), len(users))
+		# confirmation link is no longer valid
+		self.PATCH(confirm_email_url, HTTP_400_BAD_REQUEST)
 
 
-class TestPasswordReset(BaseUserTest):
-	"""api/users/password/reset/"""
+class TestPasswordActions(BaseUserTest):
+	"""POST, PUT, DELETE api/users/password/"""
 
 	def setUp(self):
 		super().setUp()
-		cache.clear()
 		self.make_user()
+		cache.clear()
 
-	def test_invalid_email(self):
-		data = {'email': "invalid@mail"}
-		self.POST(self.url_password_update, status.HTTP_400_BAD_REQUEST, data)
-
-	def test_unregistered_email(self):
+	def test_reset_password_wrong_email(self):
 		data = {'email': self.good_mail}
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		self.assertEqual(len(mail.outbox), 1)
 		email = mail.outbox[0]
 		self.assertEqual(email.from_email, self.emails_from)
 		self.assertEqual(email.to, [data['email']])
 		self.assertEqual(email.subject, "Quicksell Account Notification")
-		self.assertTrue(email.body.startswith("Someone requested to reset password"))
+		self.assertTrue(email.body.startswith("Someone made a request to reset"))
 
-	def test_valid_email(self):
+	def test_reset_password_valid_email(self):
 		data = {'email': self.user.email}
 		self.assertTrue(self.user.has_usable_password())
 		self.assertIsNone(self.user.password_reset_code)
 		self.assertIsNone(self.user.password_reset_request_time)
 		# requesting code
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		self.user.refresh_from_db()
 		self.assertIsNotNone(self.user.password_reset_code)
 		self.assertIsNotNone(self.user.password_reset_request_time)
@@ -176,106 +187,71 @@ class TestPasswordReset(BaseUserTest):
 		self.assertEqual(self.user.password_reset_code, code)
 		# reseting password
 		data |= {'code': code}
-		response = self.DELETE(self.url_password_update, status.HTTP_200_OK, data)
-		self.DELETE(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
+		response = self.DELETE(self.url_password, HTTP_200_OK, data)
+		self.DELETE(self.url_password, HTTP_401_UNAUTHORIZED, data)
 		self.assertIn('token', response.data)
 		self.user.refresh_from_db()
 		self.assertFalse(self.user.has_usable_password())
 		self.assertIsNone(self.user.password_reset_code)
 		self.assertIsNone(self.user.password_reset_request_time)
 
-	def test_invalid_request(self):
-		# invalid data
+	def test_reset_password_bad_request(self):
 		for data in (
 			{'email': self.user.email, 'code': ""},
+			{'email': self.user.email, 'code': "wrong"},
 			{'email': self.user.email, 'code': None},
 			{'email': self.user.email},
 			{'email': "invalid@mail", 'code': 111777},
+			{'email': "invalid@mail"},
 			{'code': 111777},
 			{},
 		):
-			self.DELETE(self.url_password_update, status.HTTP_400_BAD_REQUEST, data)
-		cache.clear()
+			self.DELETE(self.url_password, HTTP_400_BAD_REQUEST, data)
+
+	def test_reset_password_wrong_code(self):
 		# request to reset before requesting code
 		data = {'email': self.user.email, 'code': 123123}
-		self.DELETE(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
+		self.DELETE(self.url_password, HTTP_401_UNAUTHORIZED, data)
 		# wrong code
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		data['code'] = int(mail.outbox[0].body.split('\n')[1]) + 1
-		self.DELETE(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
+		self.DELETE(self.url_password, HTTP_401_UNAUTHORIZED, data)
 		data['code'] -= 1
-		self.DELETE(self.url_password_update, status.HTTP_200_OK, data)
-		cache.clear()
+		self.DELETE(self.url_password, HTTP_200_OK, data)
+
+	def test_reset_password_wrong_date(self):
 		# expired code
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		data = {'email': self.user.email}
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		data['code'] = int(mail.outbox[0].body.split('\n')[1])
 		self.user.refresh_from_db()
 		self.user.password_reset_request_time -= timedelta(seconds=3601)
 		self.user.save()
-		self.DELETE(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
+		self.DELETE(self.url_password, HTTP_403_FORBIDDEN, data)
 		# code without timestamp
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		data['code'] = int(mail.outbox[0].body.split('\n')[1])
 		self.user.password_reset_request_time = None
 		self.user.save()
-		self.DELETE(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
-
-	def test_throttling(self):
-		hourly_limit = 15
-		for _ in range(hourly_limit):
-			self.DELETE(self.url_password_update, status.HTTP_400_BAD_REQUEST, {})
-		for _ in range(5):
-			self.DELETE(self.url_password_update, status.HTTP_429_TOO_MANY_REQUESTS, {})
-		self.assertEqual(len(mail.outbox), 0)
-
-
-class TestUserAuthentication(BaseUserTest):
-	"""api/users/login/"""
-
-	def setUp(self):
-		super().setUp()
-		self.make_user()
-
-	def test_authentication(self):
-		for username in self.valid_email_variants(self.user.email):
-			data = {'username': username, 'password': self.user.password}
-			response = self.POST(self.url_auth, status.HTTP_200_OK, data)
-			self.assertIn('token', response.data)
-
-	def test_invalid_credentials(self):
-		for data in (
-			{'username': self.user.email, 'password': "wrong pass"},
-			{'username': "email@doesn't.exist", 'password': self.user.password}
-		):
-			response = self.POST(self.url_auth, status.HTTP_400_BAD_REQUEST, data)
-			self.assertNotIn('token', response.data)
-
-
-class TestPasswordUpdate(BaseUserTest):
-	"""api/users/password/update/"""
-
-	new_pass = "New$#21Pass"
-
-	def setUp(self):
-		super().setUp()
-		self.make_user()
-		self.authorize()
+		self.DELETE(self.url_password, HTTP_403_FORBIDDEN, data)
 
 	def test_change_password(self):
-		# changing password
-		data = {'old_password': self.user.password, 'new_password': self.new_pass}
-		response = self.PUT(self.url_password_update, status.HTTP_200_OK, data)
+		# changing password, need auth
+		data = {'old_password': self.user_pass, 'new_password': self.good_pass2}
+		response = self.PUT(self.url_password, HTTP_401_UNAUTHORIZED, data)
+		self.authorize()
+		response = self.PUT(self.url_password, HTTP_200_OK, data)
 		self.assertFalse(response.data, response.data)  # response.data is empty
 		# password is valid, but auth token is not anymore
-		data = {'old_password': self.new_pass, 'new_password': self.user.password}
-		self.PUT(self.url_password_update, status.HTTP_401_UNAUTHORIZED, data)
+		data = {'old_password': self.good_pass2, 'new_password': self.user_pass}
+		self.PUT(self.url_password, HTTP_401_UNAUTHORIZED, data)
 		# authorizing and changing password back
 		self.authorize()
-		data = {'old_password': self.new_pass, 'new_password': self.user.password}
-		response = self.PUT(self.url_password_update, status.HTTP_200_OK, data)
+		data = {'old_password': self.good_pass2, 'new_password': self.user.password}
+		response = self.PUT(self.url_password, HTTP_200_OK, data)
 		self.assertFalse(response.data, response.data)  # response.data is empty
 
-	def test_invalid_request(self):
+	def test_change_password_bad_request(self):
 		for data in (
 			{'old_password': self.user.password, 'new_password': "badpass"},
 			{'old_password': self.user.password, 'new_password': ""},
@@ -283,31 +259,50 @@ class TestPasswordUpdate(BaseUserTest):
 			{'old_password': self.user.password},
 			{},
 		):
-			self.POST(self.url_password_update, status.HTTP_400_BAD_REQUEST, data)
+			self.POST(self.url_password, HTTP_400_BAD_REQUEST, data)
 
-	def test_set_password_after_reset(self):
+	def test_reset_password_and_set_new(self):
 		# trying to set new password without providing old one
-		pass_data = {'new_password': self.new_pass}
-		self.PUT(self.url_password_update, status.HTTP_401_UNAUTHORIZED, pass_data)
+		pass_data = {'new_password': self.good_pass2}
+		self.PUT(self.url_password, HTTP_401_UNAUTHORIZED, pass_data)
 		# requesting password reset
 		data = {'email': self.user.email}
-		self.POST(self.url_password_update, status.HTTP_202_ACCEPTED, data)
+		self.POST(self.url_password, HTTP_202_ACCEPTED, data)
 		data |= {'code': int(mail.outbox[0].body.split('\n')[1])}
-		response = self.DELETE(self.url_password_update, status.HTTP_200_OK, data)
+		response = self.DELETE(self.url_password, HTTP_200_OK, data)
 		self.assertIn('token', response.data)
 		# user now has no password, API will accept any if authorized with new token
-		self.PUT(self.url_password_update, status.HTTP_401_UNAUTHORIZED, pass_data)
+		self.PUT(self.url_password, HTTP_401_UNAUTHORIZED, pass_data)
 		self.client.credentials(HTTP_AUTHORIZATION='Token ' + response.data['token'])
-		self.PUT(self.url_password_update, status.HTTP_200_OK, pass_data)
-		self.authorize()
+		self.PUT(self.url_password, HTTP_200_OK, pass_data)
+		# check login with new pass, token no longer valid
+		self.client.credentials()
+		data = {'username': self.user.email, 'password': self.good_pass2}
+		response = self.POST(self.url_login, HTTP_200_OK, data)
+		self.assertIn('token', response.data)
+		self.client.credentials(HTTP_AUTHORIZATION='Token ' + response.data['token'])
 		# changing password again requires both old and new passwords
-		self.PUT(self.url_password_update, status.HTTP_401_UNAUTHORIZED, pass_data)
-		pass_data |= {'old_password': self.new_pass}
-		self.PUT(self.url_password_update, status.HTTP_200_OK, pass_data)
+		pass_data['new_password'] = self.good_pass
+		self.PUT(self.url_password, HTTP_401_UNAUTHORIZED, pass_data)
+		pass_data |= {'old_password': self.good_pass2}
+		self.PUT(self.url_password, HTTP_200_OK, pass_data)
+		self.authorize()
+		# check login with new pass again
+		data = {'username': self.user.email, 'password': self.good_pass}
+		self.POST(self.url_login, HTTP_200_OK, data)
+		self.assertIn('token', response.data)
+
+	def test_throttling(self):
+		hourly_limit = 15
+		for _ in range(hourly_limit):
+			self.DELETE(self.url_password, HTTP_400_BAD_REQUEST, {})
+		for _ in range(5):
+			self.DELETE(self.url_password, HTTP_429_TOO_MANY_REQUESTS, {})
+		self.assertEqual(len(mail.outbox), 0)
 
 
-class TestUpdateProfileActions(BaseUserTest):
-	"""api/users/profile/"""
+class TestProfileActions(BaseUserTest):
+	"""GET, PATCH api/profiles/"""
 
 	def setUp(self):
 		super().setUp()
@@ -315,29 +310,126 @@ class TestUpdateProfileActions(BaseUserTest):
 		self.authorize()
 		self.profile = self.user.profile
 
-	def test_update_field(self):
-		data = {'full_name': "Test User"}
-		response = self.PATCH(self.url_profile_update, status.HTTP_200_OK, data)
-		self.profile.refresh_from_db()
-		self.assertEqual(response.data['full_name'], data['full_name'])
-		self.assertEqual(response.data['full_name'], self.profile.full_name)
+	def test_get_profile(self):
+		profile_url = self.url_profile_detail(args=('not_exist',))
+		self.GET(profile_url, HTTP_404_NOT_FOUND)
+		for user in baker.make(self.user_model, make_m2m=True, _quantity=10):
+			serialized_profile = profile_serializer(user.profile).data
+			profile_url = self.url_profile_detail(args=(serialized_profile['uuid'],))
+			response = self.GET(profile_url, HTTP_200_OK)
+			self.assertDictEqual(response.data, serialized_profile)
 
-	def test_unauthenticated_edit(self):
+	def test_query_profiles(self):
+		q = 111
+		baker.make(profile_model, _quantity=q, rating=0, full_name="++TEST++")
+		baker.make(profile_model, _quantity=q, rating=10, online=False)
+		baker.make(profile_model, _quantity=q, rating=20, full_name="T++T")
+		max_q = q * 3 + 1
+		self.profile.rating = 12
+		self.profile.save()
+		self.assertEqual(profile_model.objects.count(), max_q)
+
+		def count_result(params, count):
+			if count == 0:
+				return self.GET(self.url_profile, HTTP_404_NOT_FOUND, params)
+			first_page = response = self.GET(self.url_profile, HTTP_200_OK, params)
+			self.assertTupleEqual(tuple(response.data), self.pagination_fields)
+			self.assertEqual(response.data['count'], count, params)
+			self.assertIsNone(response.data['previous'])
+			for _ in range(response.data['count'] // self.page_size):
+				next_page_url = response.data['next']
+				response = self.GET(next_page_url, HTTP_200_OK)
+			self.assertIsNone(response.data['next'])
+			return first_page, response
+
+		count_result({'min_rating': 10}, max_q - q)
+		count_result({'min_rating': 20}, q)
+
+		count_result({'full_name': "++TEST++"}, q)
+		count_result({'full_name': "TEST"}, q)
+		count_result({'full_name': "test"}, q)
+		count_result({'full_name': "++"}, q * 2)
+		count_result({'full_name': "NOPE"}, 0)
+
+		count_result({'online': True}, max_q - q)
+		count_result({'online': False}, q)
+
+		now = datetime.now()
+		reg = {'registered_before': now.strftime("%Y-%m-%d")}
+		count_result(reg, 0)
+		reg = {'registered_before': (now + timedelta(days=1)).strftime("%Y-%m-%d")}
+		count_result(reg, max_q)
+
+		count_result({'min_rating': 10, 'online': False}, q)
+		count_result({'min_rating': 10, 'online': True}, q + 1)
+		count_result({'full_name': "++", 'online': False}, 0)
+		count_result({'full_name': "++", 'min_rating': 12}, q)
+
+		data = {'min_rating': 10, 'order_by': 'rating'}
+		first_page, last_page = count_result(data, max_q - q)
+		self.assertEqual(first_page.data['results'][0]['rating'], 10)
+		self.assertEqual(last_page.data['results'][-1]['rating'], 20)
+
+		data = {'min_rating': 10, 'order_by': '-rating'}
+		first_page, last_page = count_result(data, max_q - q)
+		self.assertEqual(first_page.data['results'][0]['rating'], 20)
+		self.assertEqual(last_page.data['results'][-1]['rating'], 10)
+
+	def test_update_profile(self):
+		# edit name
+		data = {'full_name': "Test User"}
+		response = self.PATCH(self.url_profile, HTTP_200_OK, data)
+		self.profile.refresh_from_db()
+		self.assertDictEqual(response.data, profile_serializer(self.profile).data)
+		# edit everything
+		filled_profile = baker.prepare(
+			profile_model, _fill_optional=True, _save_related=True, online=False)
+		new_data = profile_serializer(filled_profile).data
+		response = self.PATCH(self.url_profile, HTTP_200_OK, new_data)
+		self.profile.refresh_from_db()
+		self.assertDictEqual(response.data, profile_serializer(self.profile).data)
+		# unauthenticated edit
 		self.client.credentials()
-		data = {'full_name': "Should Not Change"}
-		self.PATCH(self.url_profile_update, status.HTTP_401_UNAUTHORIZED, data)
+		data = {'full_name': "Should not change"}
+		self.PATCH(self.url_profile, HTTP_401_UNAUTHORIZED, data)
 		self.profile.refresh_from_db()
 		self.assertNotEqual(data['full_name'], self.profile.full_name)
 
-	def test_update_profile(self):
-		read_only_fields = {'uuid', 'online', 'rating', 'location'}
-		profile_replace = baker.prepare(
-			self.profile_model, _fill_optional=True, _save_related=True, online=False)
-		data = profile_serializer(profile_replace).data
-		response = self.PATCH(self.url_profile_update, status.HTTP_200_OK, data)
-		self.assertTupleEqual(tuple(response.data), self.profile_fields)
-		self.profile.refresh_from_db()
-		unchanged = {field: response.data.pop(field) for field in read_only_fields}
-		self.field_by_field_compare(unchanged, self.profile, read_only_fields)
-		changed_fields = set(self.profile_fields) - read_only_fields
-		self.field_by_field_compare(response.data, self.profile, changed_fields)
+
+class TestUserFull(BaseUserTest):
+	"""Complex chains of User's actions."""
+
+	def test_new_users_actions(self):
+		user_count = 100
+		for i in range(1, user_count):
+			# create user
+			data = {'email': str(i) + self.good_mail, 'password': self.good_pass}
+			response = self.POST(self.url_user, HTTP_201_CREATED, data)
+			user = self.user_model.objects.get(email=data['email'])
+			self.assertDictEqual(response.data, user_serializer(user).data)
+			# confirm email
+			confirm_email_url = mail.outbox[-1].body.split('\n')[1]
+			self.GET(confirm_email_url, HTTP_200_OK)
+			self.PATCH(confirm_email_url, HTTP_200_OK)
+			user.refresh_from_db()
+			self.assertTrue(user.is_email_verified)
+			# authorize
+			data = {'username': user.email, 'password': self.good_pass}
+			response = self.POST(self.url_login, HTTP_200_OK, data)
+			self.assertIn('token', response.data)
+			self.client.credentials(
+				HTTP_AUTHORIZATION="Token " + response.data['token'])
+			# update profile
+			data = {'full_name': "Dummy", 'about': "Test user."}
+			response = self.PATCH(self.url_profile, HTTP_200_OK, data)
+			user.profile.refresh_from_db()
+			self.assertDictEqual(response.data, profile_serializer(user.profile).data)
+			# update password
+			data = {'old_password': self.good_pass, 'new_password': self.good_pass2}
+			self.PUT(self.url_password, HTTP_200_OK, data)
+			self.client.credentials()
+			data = {'username': user.email, 'password': self.good_pass2}
+			response = self.POST(self.url_login, HTTP_200_OK, data)
+			self.assertIn('token', response.data)
+
+			self.assertEqual(self.user_model.objects.count(), i)

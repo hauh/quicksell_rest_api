@@ -4,8 +4,9 @@ from uuid import UUID
 from django.utils.http import urlsafe_base64_decode
 
 from rest_framework.response import Response
-from rest_framework.serializers import (
-	Serializer, CharField, DateField, IntegerField, BooleanField)
+from rest_framework.serializers import Serializer
+from rest_framework.fields import (
+	CharField, DateField, IntegerField, BooleanField)
 from rest_framework.generics import GenericAPIView
 from rest_framework.exceptions import NotFound
 from rest_framework.status import HTTP_200_OK
@@ -17,11 +18,11 @@ from quicksell_app.serializers import Profile as profile_serializer
 class ProfileQuerySerializer(Serializer):
 	"""GET Profiles list query serializer."""
 
-	order_by = CharField(required=False, default='-rating')
+	order_by = CharField(default='-rating')
 	full_name = CharField(required=False)
 	registered_before = DateField(required=False)
 	min_rating = IntegerField(required=False)
-	online = BooleanField(required=False)
+	online = BooleanField(required=False, allow_null=True, default=None)
 
 	def validate_order_by(self, order_by):
 		if not order_by.removeprefix('-') in profile_serializer().get_fields():
@@ -36,7 +37,7 @@ class ProfileQuerySerializer(Serializer):
 			filters['date_created__lt'] = registered_before
 		if min_rating := validated_data.get('min_rating'):
 			filters['rating__gte'] = min_rating
-		if online := validated_data.get('online'):
+		if (online := validated_data.get('online')) is not None:
 			filters['online'] = online
 		return filters
 

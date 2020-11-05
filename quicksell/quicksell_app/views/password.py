@@ -6,8 +6,9 @@ from datetime import datetime
 from django.contrib.auth import password_validation
 from django.core.mail import send_mail as django_send_mail
 
-from rest_framework.serializers import (
-	Serializer, CharField, EmailField, IntegerField, SerializerMethodField)
+from rest_framework.serializers import Serializer
+from rest_framework.fields import (
+	CharField, EmailField, IntegerField, SerializerMethodField)
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -31,7 +32,7 @@ MESSAGES = {
 		"If you didn't request password reset, just ignore this message."
 	),
 	'wrong_email': (
-		"Someone requested to reset password for their account, "
+		"Someone made a request to reset password for their account, "
 		"but there is no account associated with this email address. "
 		"If that was you, try another address or contact support. "
 		"Otherwise just ignore this message (or check our app)."
@@ -185,7 +186,8 @@ class Password(GenericAPIView):
 		user = serializer.instance
 		if not user or user.password_reset_code != serializer.validated_data['code']:
 			raise AuthenticationFailed("Wrong code or email not found.")
-		if (datetime.now() - user.password_reset_request_time).seconds > CODE_EXPIRY:
+		reset_time = user.password_reset_request_time
+		if not reset_time or (datetime.now() - reset_time).seconds > CODE_EXPIRY:
 			raise PermissionDenied("Code expired.")
 		serializer.save()
 		self.send_mail(MESSAGES['reset'], user.email)

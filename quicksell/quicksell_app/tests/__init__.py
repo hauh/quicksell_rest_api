@@ -4,8 +4,8 @@ from django.conf import settings
 from model_bakery import baker
 
 from .user import (
-	TestUserCreation, TestPasswordReset, TestUserAuthentication,
-	TestPasswordUpdate, TestUpdateProfileActions
+	TestAuthentication, TestUserCreation, TestEmailConfirmation,
+	TestPasswordActions, TestProfileActions, TestUserFull
 )
 # from .listing import UsersTests
 
