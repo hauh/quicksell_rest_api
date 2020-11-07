@@ -11,6 +11,8 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.exceptions import NotFound
 from rest_framework.status import HTTP_200_OK
 
+from drf_yasg.utils import swagger_auto_schema
+
 from quicksell_app.models import Profile as profile_model
 from quicksell_app.serializers import Profile as profile_serializer
 
@@ -48,6 +50,17 @@ class Profile(GenericAPIView):
 	queryset = profile_model.objects
 	serializer_class = profile_serializer
 
+	@swagger_auto_schema(
+		operation_id='profile-list',
+		operation_summary="Get filtered list of Profiles",
+		operation_description=(
+			"Returns paginated list of Profiles fitered by query params. Ten "
+			"profiles per page. Can be ordered by any Profile field. If field "
+			"name prefixed with '-' ordering will be descending."
+		),
+		query_serializer=ProfileQuerySerializer,
+		security=[],
+	)
 	def get(self, request, *args, **kwargs):
 		query_serializer = ProfileQuerySerializer(data=request.query_params)
 		query_serializer.is_valid(raise_exception=True)
@@ -60,6 +73,14 @@ class Profile(GenericAPIView):
 		serializer = self.get_serializer(pages, many=True)
 		return self.get_paginated_response(serializer.data)
 
+	@swagger_auto_schema(
+		operation_id='profile-update',
+		operation_summary='Update Profile',
+		operation_description=(
+			"Updates authorized User's Profile with values from request body. "
+			"Read-only fields will be ignored."
+		)
+	)
 	def patch(self, request, *args, **kwargs):
 		serializer = self.get_serializer(request.user.profile, data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -74,6 +95,14 @@ class ProfileDetail(GenericAPIView):
 	serializer_class = profile_serializer
 	lookup_field = 'uuid'
 
+	@swagger_auto_schema(
+		operation_id='profile-details',
+		operation_summary='Get Profile',
+		operation_description=(
+			"Returns Profile of a Users by uuid in URL."
+		),
+		security=[],
+	)
 	def get(self, _request, base64uuid):
 		try:
 			uuid = UUID(bytes=urlsafe_base64_decode(base64uuid), version=4)

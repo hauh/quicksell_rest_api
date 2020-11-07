@@ -12,6 +12,8 @@ from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.exceptions import ValidationError
 from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED
 
+from drf_yasg.utils import swagger_auto_schema
+
 from quicksell_app.models import User as user_model
 from quicksell_app.serializers import User as user_serializer
 
@@ -39,9 +41,26 @@ class User(GenericAPIView):
 			# pylint: disable=attribute-defined-outside-init
 			self.permission_classes = (AllowAny,)
 
+	@swagger_auto_schema(
+		operation_id='user-details',
+		operation_summary="Get User's account and Profile",
+		operation_description=(
+			"Returns authorized User's account info and that User's Profile."
+		),
+		responses={HTTP_200_OK: user_serializer}
+	)
 	def get(self, request, *args, **kwargs):
 		return Response(self.get_serializer(request.user).data, status=HTTP_200_OK)
 
+	@swagger_auto_schema(
+		operation_id='user-create',
+		operation_summary="Create User",
+		operation_description=(
+			"Creates new User with email and password. Email confirmation link "
+			"will be sent to provided email."
+		),
+		security=[],
+	)
 	def post(self, request, *args, **kwargs):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
@@ -59,6 +78,14 @@ class User(GenericAPIView):
 		)
 		return Response(serializer.data, status=HTTP_201_CREATED)
 
+	@swagger_auto_schema(
+		operation_id='user-update',
+		operation_summary='Update User',
+		operation_description=(
+			"Updates authorized User's with values from request body. "
+			"Read-only fields will be ignored."
+		)
+	)
 	def patch(self, request, *args, **kwargs):
 		serializer = self.get_serializer(self.request.user, data=request.data)
 		serializer.is_valid(raise_exception=True)
