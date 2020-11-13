@@ -3,11 +3,21 @@
 from django.utils.http import urlsafe_base64_encode
 from django.contrib.auth import password_validation
 
-from rest_framework import serializers
+from rest_framework.serializers import ModelSerializer
 from quicksell_app import models
 
 
-class Profile(serializers.ModelSerializer):
+class QuicksellSerializer(ModelSerializer):
+	"""Customized serialization."""
+
+	def to_representation(self, obj):
+		representation = super().to_representation(obj)
+		if 'uuid' in representation:
+			representation['uuid'] = urlsafe_base64_encode(obj.uuid.bytes)
+		return representation
+
+
+class Profile(QuicksellSerializer):
 	"""Users' Profile info."""
 
 	class Meta:
@@ -18,13 +28,8 @@ class Profile(serializers.ModelSerializer):
 		)
 		read_only_fields = ('uuid', 'date_created', 'online', 'rating', 'location')
 
-	def to_representation(self, profile):
-		representation = super().to_representation(profile)
-		representation['uuid'] = urlsafe_base64_encode(profile.uuid.bytes)
-		return representation
 
-
-class User(serializers.ModelSerializer):
+class User(ModelSerializer):
 	"""Users's account."""
 
 	profile = Profile(read_only=True)
@@ -44,3 +49,21 @@ class User(serializers.ModelSerializer):
 
 	def create(self, validated_data):
 		return self.Meta.model.objects.create_user(**validated_data)
+
+
+class Listing(QuicksellSerializer):
+	"""Listing info."""
+
+	seller = Profile(read_only=True)
+
+	class Meta:
+		model = models.Listing
+		fields = (
+			'uuid', 'title', 'description', 'price', 'category', 'status',
+			'quantity', 'sold', 'views', 'date_created', 'date_expires',
+			'location', 'condition_new', 'characteristics', 'seller', 'photos'
+		)
+		depth = 1
+		read_only_fields =\
+			('uuid', 'sold', 'views', 'date_created', 'seller', 'shop', 'photos')
+		ordering = 'created'

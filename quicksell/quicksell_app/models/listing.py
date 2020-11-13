@@ -1,17 +1,26 @@
 """Listing model."""
 
-from django.db import models
-from django.utils import timezone
+import uuid
+from datetime import datetime, timedelta
+
+from django.db.models import (
+	CASCADE, SET_NULL,
+	CharField, BooleanField, DateTimeField, ForeignKey, ImageField,
+	IntegerChoices, JSONField, PositiveIntegerField, PositiveSmallIntegerField,
+	SmallIntegerField, TextField, UUIDField
+)
+
+from .basemodel import QuicksellModel
 
 
 def default_expiration_date():
-	return timezone.now() + timezone.timedelta(days=30)
+	return datetime.now() + timedelta(days=30)
 
 
-class Listing(models.Model):
+class Listing(QuicksellModel):
 	"""Listing model."""
 
-	class Status(models.IntegerChoices):
+	class Status(IntegerChoices):
 		"""Listing's poissble states."""
 
 		draft = 0, 'Draft'
@@ -20,10 +29,10 @@ class Listing(models.Model):
 		closed = 3, 'Closed'
 		deleted = 4, 'Deleted'
 
-	class Category(models.IntegerChoices):
+	class Category(IntegerChoices):
 		"""Listing's categories."""
 
-		transport = 1, 'Transport'
+		phones = 1, 'Телефоны и планшеты'
 		furnishings = 2, 'For houses and dachas'
 		belongings = 3, 'Personal belongings'
 		hobby = 4, 'Hobby'
@@ -31,32 +40,30 @@ class Listing(models.Model):
 		electronics = 6, 'Electronics'
 		services = 7, 'Sevrvices'
 
-	title = models.CharField(max_length=200)
-	description = models.TextField(null=True, blank=True)
-	price = models.PositiveIntegerField()
-	category = models.PositiveSmallIntegerField(choices=Category.choices)
-	status = models.PositiveSmallIntegerField(choices=Status.choices, default=0)
-	quantity = models.PositiveIntegerField(default=1)
-	sold = models.PositiveIntegerField(default=0)
-	views = models.PositiveIntegerField(default=0)
-	date_created = models.DateTimeField(default=timezone.now, editable=False)
-	date_expires = models.DateTimeField(default=default_expiration_date)
-	location = models.ForeignKey(
-		'Location', related_name='+', null=True, on_delete=models.SET_NULL)
-	seller = models.ForeignKey(
-		'Profile', related_name='listings', on_delete=models.CASCADE)
-	shop = models.CharField(max_length=100, default='Shop Name')
-	# shop = models.ForeignKey(
-	# 	'Shop', related_name='listings', on_delete=models.CASCADE)
+	uuid = UUIDField(default=uuid.uuid4, unique=True, editable=False)
+	title = CharField(max_length=200)
+	description = TextField(null=True, blank=True)
+	price = PositiveIntegerField()
+	category = PositiveSmallIntegerField(choices=Category.choices)
+	status = PositiveSmallIntegerField(choices=Status.choices, default=0)
+	quantity = PositiveIntegerField(default=1)
+	sold = PositiveIntegerField(default=0)
+	views = PositiveIntegerField(default=0)
+	date_created = DateTimeField(default=datetime.now, editable=False)
+	date_expires = DateTimeField(default=default_expiration_date)
+	condition_new = BooleanField(default=False)
+	characteristics = JSONField(null=True, blank=True)
+	location = ForeignKey(
+		'Location', related_name='+', null=True, on_delete=SET_NULL)
+	seller = ForeignKey('Profile', related_name='listings', on_delete=CASCADE)
 
 	def __str__(self):
 		return self.title
 
 
-class Photo(models.Model):
+class Photo(QuicksellModel):
 	"""Listing's Photo model."""
 
-	listing = models.ForeignKey(
-		'Listing', related_name='photos', on_delete=models.CASCADE)
-	image = models.ImageField(upload_to='images/listings/')  # TODO: resize
-	order = models.SmallIntegerField(default=0)
+	listing = ForeignKey('Listing', related_name='photos', on_delete=CASCADE)
+	image = ImageField(upload_to='images/listings/')
+	order = SmallIntegerField(default=0)

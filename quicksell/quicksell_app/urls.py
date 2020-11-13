@@ -30,6 +30,7 @@ urlpatterns = router.urls + [
 			views.ProfileDetail.as_view(), name='profile-detail'),  # GET
 	])),
 	path('listings/', include([
-		path('new/', views.ListingCreate.as_view(), name='listing-create'),  # POST
+		path('', views.Listing.as_view(), name='listing'),  # GET, POST
+		path('<str:base64uuid>/', views.ListingDetail.as_view(), name='listing'),  # GET, PATCH, DELETE  # noqa:E501
 	]))
 ]

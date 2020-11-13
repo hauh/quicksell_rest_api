@@ -20,15 +20,18 @@ from quicksell_app.serializers import Profile as profile_serializer
 class ProfileQuerySerializer(Serializer):
 	"""GET Profiles list query serializer."""
 
-	order_by = CharField(default='-rating')
+	orderable_fields = ('full_name', 'date_created', 'rating', 'location')
+	default_ordering = '-rating'
+
+	order_by = CharField(default=default_ordering)
 	full_name = CharField(required=False)
 	registered_before = DateField(required=False)
 	min_rating = IntegerField(required=False)
 	online = BooleanField(required=False, allow_null=True, default=None)
 
 	def validate_order_by(self, order_by):
-		if not order_by.removeprefix('-') in profile_serializer().get_fields():
-			return self.fields['order_by'].default
+		if not order_by.removeprefix('-') in self.orderable_fields:
+			return self.default_ordering
 		return order_by
 
 	def to_representation(self, validated_data):
@@ -45,7 +48,7 @@ class ProfileQuerySerializer(Serializer):
 
 
 class Profile(GenericAPIView):
-	"""User's Profile."""
+	"""Get or edit user's Profile."""
 
 	queryset = profile_model.objects
 	serializer_class = profile_serializer
@@ -54,9 +57,11 @@ class Profile(GenericAPIView):
 		operation_id='profile-list',
 		operation_summary="Get filtered list of Profiles",
 		operation_description=(
-			"Returns paginated list of Profiles fitered by query params. Ten "
-			"profiles per page. Can be ordered by any Profile field. If field "
-			"name prefixed with '-' ordering will be descending."
+			"Returns paginated list of Profiles fitered by query params. "
+			"Ten profiles per page. Can be ordered by any of "
+			f"{ProfileQuerySerializer.orderable_fields} fields. "
+			"If field name prefixed with '-' ordering will be descending. "
+			f"Default ordering is '{ProfileQuerySerializer.default_ordering}'."
 		),
 		query_serializer=ProfileQuerySerializer,
 		security=[],
@@ -98,9 +103,7 @@ class ProfileDetail(GenericAPIView):
 	@swagger_auto_schema(
 		operation_id='profile-details',
 		operation_summary='Get Profile',
-		operation_description=(
-			"Returns Profile of a Users by uuid in URL."
-		),
+		operation_description="Returns Profile of a Users by uuid from query.",
 		security=[],
 	)
 	def get(self, _request, base64uuid):
