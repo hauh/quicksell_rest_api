@@ -311,8 +311,11 @@ class TestProfileActions(BaseUserTest):
 		self.profile = self.user.profile
 
 	def test_get_profile(self):
-		profile_url = self.url_profile_detail(args=('not_exist',))
+		profile_url = self.url_profile_detail(args=('invalid_uuid',))
 		self.GET(profile_url, HTTP_404_NOT_FOUND)
+		valid_uuid = profile_serializer(self.user.profile).data['uuid']
+		not_existing_url = self.url_profile_detail(args=(valid_uuid[:-3] + 'abs',))
+		self.GET(not_existing_url, HTTP_404_NOT_FOUND)
 		for user in baker.make(self.user_model, make_m2m=True, _quantity=10):
 			serialized_profile = profile_serializer(user.profile).data
 			profile_url = self.url_profile_detail(args=(serialized_profile['uuid'],))
@@ -320,6 +323,7 @@ class TestProfileActions(BaseUserTest):
 			self.assertDictEqual(response.data, serialized_profile)
 
 	def test_query_profiles(self):
+		check_result = partial(self.query_paginated_result, self.url_profile)
 		q = 111
 		baker.make(profile_model, _quantity=q, rating=0, full_name="++TEST++")
 		baker.make(profile_model, _quantity=q, rating=10, online=False)
@@ -329,49 +333,36 @@ class TestProfileActions(BaseUserTest):
 		self.profile.save()
 		self.assertEqual(profile_model.objects.count(), max_q)
 
-		def count_result(params, count):
-			if count == 0:
-				return self.GET(self.url_profile, HTTP_404_NOT_FOUND, params)
-			first_page = response = self.GET(self.url_profile, HTTP_200_OK, params)
-			self.assertTupleEqual(tuple(response.data), self.pagination_fields)
-			self.assertEqual(response.data['count'], count, params)
-			self.assertIsNone(response.data['previous'])
-			for _ in range(response.data['count'] // self.page_size):
-				next_page_url = response.data['next']
-				response = self.GET(next_page_url, HTTP_200_OK)
-			self.assertIsNone(response.data['next'])
-			return first_page, response
+		check_result({'min_rating': 10}, max_q - q)
+		check_result({'min_rating': 20}, q)
 
-		count_result({'min_rating': 10}, max_q - q)
-		count_result({'min_rating': 20}, q)
+		check_result({'full_name': "++TEST++"}, q)
+		check_result({'full_name': "TEST"}, q)
+		check_result({'full_name': "test"}, q)
+		check_result({'full_name': "++"}, q * 2)
+		check_result({'full_name': "NOPE"}, 0)
 
-		count_result({'full_name': "++TEST++"}, q)
-		count_result({'full_name': "TEST"}, q)
-		count_result({'full_name': "test"}, q)
-		count_result({'full_name': "++"}, q * 2)
-		count_result({'full_name': "NOPE"}, 0)
-
-		count_result({'online': True}, max_q - q)
-		count_result({'online': False}, q)
+		check_result({'online': True}, max_q - q)
+		check_result({'online': False}, q)
 
 		now = datetime.now()
 		reg = {'registered_before': now.strftime("%Y-%m-%d")}
-		count_result(reg, 0)
+		check_result(reg, 0)
 		reg = {'registered_before': (now + timedelta(days=1)).strftime("%Y-%m-%d")}
-		count_result(reg, max_q)
+		check_result(reg, max_q)
 
-		count_result({'min_rating': 10, 'online': False}, q)
-		count_result({'min_rating': 10, 'online': True}, q + 1)
-		count_result({'full_name': "++", 'online': False}, 0)
-		count_result({'full_name': "++", 'min_rating': 12}, q)
+		check_result({'min_rating': 10, 'online': False}, q)
+		check_result({'min_rating': 10, 'online': True}, q + 1)
+		check_result({'full_name': "++", 'online': False}, 0)
+		check_result({'full_name': "++", 'min_rating': 12}, q)
 
 		data = {'min_rating': 10, 'order_by': 'rating'}
-		first_page, last_page = count_result(data, max_q - q)
+		first_page, last_page = check_result(data, max_q - q)
 		self.assertEqual(first_page.data['results'][0]['rating'], 10)
 		self.assertEqual(last_page.data['results'][-1]['rating'], 20)
 
 		data = {'min_rating': 10, 'order_by': '-rating'}
-		first_page, last_page = count_result(data, max_q - q)
+		first_page, last_page = check_result(data, max_q - q)
 		self.assertEqual(first_page.data['results'][0]['rating'], 20)
 		self.assertEqual(last_page.data['results'][-1]['rating'], 10)
 
@@ -397,7 +388,7 @@ class TestProfileActions(BaseUserTest):
 
 
 class TestUserFull(BaseUserTest):
-	"""Complex chains of User's actions."""
+	"""Test all User's actions together."""
 
 	def test_new_users_actions(self):
 		user_count = 100

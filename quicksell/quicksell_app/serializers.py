@@ -1,24 +1,36 @@
 """User serilaizers."""
 
-from django.utils.http import urlsafe_base64_encode
+from uuid import UUID
+
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.auth import password_validation
 
 from rest_framework.serializers import ModelSerializer
+from rest_framework.fields import Field, IntegerField
+from rest_framework.exceptions import NotFound
+
 from quicksell_app import models
 
 
-class QuicksellSerializer(ModelSerializer):
-	"""Customized serialization."""
+class Base64UUIDField(Field):
+	"""UUID to pretty base64 format."""
 
-	def to_representation(self, obj):
-		representation = super().to_representation(obj)
-		if 'uuid' in representation:
-			representation['uuid'] = urlsafe_base64_encode(obj.uuid.bytes)
-		return representation
+	def to_representation(self, value):
+		return urlsafe_base64_encode(value.bytes)
+
+	def to_internal_value(self, data):
+		if isinstance(data, UUID):
+			return data
+		try:
+			return UUID(bytes=urlsafe_base64_decode(data))
+		except ValueError as err:
+			raise NotFound() from err
 
 
-class Profile(QuicksellSerializer):
+class Profile(ModelSerializer):
 	"""Users' Profile info."""
+
+	uuid = Base64UUIDField(read_only=True)
 
 	class Meta:
 		model = models.Profile
@@ -51,9 +63,11 @@ class User(ModelSerializer):
 		return self.Meta.model.objects.create_user(**validated_data)
 
 
-class Listing(QuicksellSerializer):
+class Listing(ModelSerializer):
 	"""Listing info."""
 
+	uuid = Base64UUIDField(read_only=True)
+	price = IntegerField(min_value=0)
 	seller = Profile(read_only=True)
 
 	class Meta:
@@ -64,6 +78,8 @@ class Listing(QuicksellSerializer):
 			'location', 'condition_new', 'characteristics', 'seller', 'photos'
 		)
 		depth = 1
-		read_only_fields =\
-			('uuid', 'sold', 'views', 'date_created', 'seller', 'shop', 'photos')
+		read_only_fields = (
+			'uuid', 'sold', 'views', 'date_created',
+			'date_expires', 'seller', 'shop', 'photos'
+		)
 		ordering = 'created'

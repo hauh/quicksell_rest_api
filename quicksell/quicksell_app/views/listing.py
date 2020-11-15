@@ -1,20 +1,18 @@
 """Profile endpoint."""
 
-from uuid import UUID
-from django.utils.http import urlsafe_base64_decode
-
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.fields import BooleanField, CharField, IntegerField
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
-from rest_framework.fields import CharField, IntegerField
-from rest_framework.generics import GenericAPIView
-from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.status import (
 	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT)
 
-from drf_yasg.utils import swagger_auto_schema, no_body
+from drf_yasg.utils import no_body, swagger_auto_schema
 
-from quicksell_app.models import Listing as listing_model
+from quicksell_app.serializers import Base64UUIDField
 from quicksell_app.serializers import Listing as listing_serializer
+from quicksell_app.models import Listing as listing_model
 
 
 class ListingQuerySerializer(Serializer):
@@ -25,9 +23,11 @@ class ListingQuerySerializer(Serializer):
 	default_ordering = '-price'
 
 	order_by = CharField(default=default_ordering)
+	title = CharField(required=False)
 	min_price = IntegerField(min_value=0, required=False)
 	max_price = IntegerField(min_value=0, required=False)
-	title = CharField(required=False)
+	condition_new = BooleanField(required=False, allow_null=True, default=None)
+	seller = Base64UUIDField(required=False)
 
 	def validate_order_by(self, order_by):
 		if not order_by.removeprefix('-') in self.orderable_fields:
@@ -42,6 +42,10 @@ class ListingQuerySerializer(Serializer):
 			filters['price__gte'] = min_price
 		if max_price := validated_data.get('max_price'):
 			filters['price__lte'] = max_price
+		if (condition_new := validated_data.get('condition_new')) is not None:
+			filters['condition_new'] = condition_new
+		if seller := validated_data.get('seller'):
+			filters['seller__uuid'] = seller
 		return filters
 
 
@@ -98,11 +102,11 @@ class ListingDetail(GenericAPIView):
 	lookup_field = 'uuid'
 
 	def get_object(self, base64uuid):
-		try:
-			uuid = UUID(bytes=urlsafe_base64_decode(base64uuid), version=4)
-		except ValueError:
-			raise NotFound()  # pylint: disable=raise-missing-from
-		return self.filter_queryset(self.get_queryset()).get(uuid=uuid)
+		uuid = Base64UUIDField().to_internal_value(base64uuid)
+		listing = self.filter_queryset(self.get_queryset()).get_or_none(uuid=uuid)
+		if not listing:
+			raise NotFound()
+		return listing
 
 	def check_object_permissions(self, request, listing):
 		if request.user.profile != listing.seller:
@@ -129,7 +133,7 @@ class ListingDetail(GenericAPIView):
 	def patch(self, request, base64uuid):
 		listing = self.get_object(base64uuid)
 		self.check_object_permissions(request, listing)
-		serializer = self.get_serializer(listing, data=request.data)
+		serializer = self.get_serializer(listing, data=request.data, partial=True)
 		serializer.is_valid(raise_exception=True)
 		serializer.save()
 		return Response(serializer.data, status=HTTP_200_OK)

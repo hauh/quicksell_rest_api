@@ -7,7 +7,7 @@ from .user import (
 	TestAuthentication, TestUserCreation, TestEmailConfirmation,
 	TestPasswordActions, TestProfileActions, TestUserFull
 )
-# from .listing import UsersTests
+from .listing import TestListingCreation, TestListingEdit, TestListingFull
 
 
 settings.PASSWORD_HASHERS = ('django.contrib.auth.hashers.MD5PasswordHasher',)

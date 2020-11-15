@@ -1,20 +1,18 @@
 """Profile endpoint."""
 
-from uuid import UUID
-from django.utils.http import urlsafe_base64_decode
-
+from rest_framework.exceptions import NotFound
+from rest_framework.fields import (
+	BooleanField, CharField, DateField, IntegerField)
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
-from rest_framework.fields import (
-	CharField, DateField, IntegerField, BooleanField)
-from rest_framework.generics import GenericAPIView
-from rest_framework.exceptions import NotFound
 from rest_framework.status import HTTP_200_OK
 
 from drf_yasg.utils import swagger_auto_schema
 
-from quicksell_app.models import Profile as profile_model
+from quicksell_app.serializers import Base64UUIDField
 from quicksell_app.serializers import Profile as profile_serializer
+from quicksell_app.models import Profile as profile_model
 
 
 class ProfileQuerySerializer(Serializer):
@@ -107,10 +105,7 @@ class ProfileDetail(GenericAPIView):
 		security=[],
 	)
 	def get(self, _request, base64uuid):
-		try:
-			uuid = UUID(bytes=urlsafe_base64_decode(base64uuid), version=4)
-		except ValueError:
-			raise NotFound()  # pylint: disable=raise-missing-from
+		uuid = Base64UUIDField().to_internal_value(base64uuid)
 		profile = self.filter_queryset(self.get_queryset()).get_or_none(uuid=uuid)
 		if not profile:
 			raise NotFound()

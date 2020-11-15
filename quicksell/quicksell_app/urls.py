@@ -17,20 +17,21 @@ urlpatterns = router.urls + [
 		path('swagger/', schema_view.with_ui('swagger'), name='schema-swagger'),
 	])),
 	path('users/', include([
-		path('', views.User.as_view(), name='user'),  # GET, POST, PATCH
-		path('login/', obtain_auth_token, name='login'),  # POST
+		path('', views.User.as_view(), name='user'),
+		path('login/', obtain_auth_token, name='login'),
 		# path('logout/', name='logout'),  # DELETE
-		path('password/', views.Password.as_view(), name='password'),  # PUT, POST, DELETE  # noqa:E501
+		path('password/', views.Password.as_view(), name='password'),
 		path('email/<str:base64email>/<str:token>/',
-			views.EmailConfirm.as_view(), name='email-confirm'),  # GET, PATCH
+			views.EmailConfirm.as_view(), name='email-confirm'),
 	])),
 	path('profiles/', include([
-		path('', views.Profile.as_view(), name='profile'),  # GET, PATCH
+		path('', views.Profile.as_view(), name='profile'),
 		path('<str:base64uuid>/',
-			views.ProfileDetail.as_view(), name='profile-detail'),  # GET
+			views.ProfileDetail.as_view(), name='profile-detail'),
 	])),
 	path('listings/', include([
-		path('', views.Listing.as_view(), name='listing'),  # GET, POST
-		path('<str:base64uuid>/', views.ListingDetail.as_view(), name='listing'),  # GET, PATCH, DELETE  # noqa:E501
+		path('', views.Listing.as_view(), name='listing'),
+		path('<str:base64uuid>/',
+			views.ListingDetail.as_view(), name='listing-detail'),
 	]))
 ]
