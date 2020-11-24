@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # db:
+  #   image: postgres
+  #   container_name: 'quicksell_db'
+  #   ports:
+  #     - 5432:5432
+  #   volumes:
+  #     - quicksell_db:/var/lib/postgresql
+  #   environment:
+  #     - POSTGRES_DB=quicksell_db
+  #     - POSTGRES_USER=quicksell_db_manager
+  #     - POSTGRES_PASSWORD=quicksell_db_pass
+  app:
+    build: .
+    image: 'quicksell'
+    container_name: 'quicksell_app'
+    command: >
+      bash -c "
+        python quicksell/manage.py makemigrations &&
+        python quicksell/manage.py migrate &&
+        python quicksell/manage.py runserver 0.0.0.0:8000
+      "
+    ports:
+      - 7777:8000
+    volumes:
+      - ./quicksell:/opt/app/quicksell
+    # depends_on:
+    #   - db
+
+# volumes:
+#   quicksell_db: {}
