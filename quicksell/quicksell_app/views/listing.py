@@ -1,25 +1,27 @@
 """Profile endpoint."""
 
+from drf_yasg.utils import no_body, swagger_auto_schema
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.fields import BooleanField, CharField, IntegerField
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.status import (
-	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT)
+	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
+)
 
-from drf_yasg.utils import no_body, swagger_auto_schema
-
+from quicksell_app.models import Listing as listing_model
 from quicksell_app.serializers import Base64UUIDField
 from quicksell_app.serializers import Listing as listing_serializer
-from quicksell_app.models import Listing as listing_model
 
 
 class ListingQuerySerializer(Serializer):
 	"""GET Listings list query serializer."""
 
 	orderable_fields = (
-		'title', 'price', 'quantity', 'views', 'date_created', 'location',)
+		'title', 'price', 'quantity', 'views',
+		'date_created', 'location', 'category'
+	)
 	default_ordering = '-price'
 
 	order_by = CharField(default=default_ordering)
@@ -27,6 +29,7 @@ class ListingQuerySerializer(Serializer):
 	min_price = IntegerField(min_value=0, required=False)
 	max_price = IntegerField(min_value=0, required=False)
 	condition_new = BooleanField(required=False, allow_null=True, default=None)
+	category = CharField(required=False)
 	seller = Base64UUIDField(required=False)
 
 	def validate_order_by(self, order_by):
@@ -44,6 +47,8 @@ class ListingQuerySerializer(Serializer):
 			filters['price__lte'] = max_price
 		if (condition_new := validated_data.get('condition_new')) is not None:
 			filters['condition_new'] = condition_new
+		if category := validated_data.get('category'):
+			filters['category__name'] = category
 		if seller := validated_data.get('seller'):
 			filters['seller__uuid'] = seller
 		return filters

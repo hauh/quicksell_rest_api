@@ -4,14 +4,15 @@ from functools import partial
 
 from django.urls import reverse
 from model_bakery import baker
-from quicksell_app.models import Category as category_model
-from quicksell_app.models import Listing as listing_model
-from quicksell_app.serializers import Base64UUIDField
-from quicksell_app.serializers import Listing as listing_serializer
 from rest_framework.status import (
 	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST,
 	HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
 )
+
+from quicksell_app.models import Category as category_model
+from quicksell_app.models import Listing as listing_model
+from quicksell_app.serializers import Base64UUIDField
+from quicksell_app.serializers import Listing as listing_serializer
 
 from .basetest import BaseTest
 
@@ -34,6 +35,10 @@ class BaseListingsTest(BaseTest):
 class TestListingCreation(BaseListingsTest):
 	"""POST, GET /api/listings/"""
 
+	def setUp(self):
+		super().setUp()
+		self.category = category_model.objects.create(name='test_cat')
+
 	def test_query_listings(self):
 		check_result = partial(self.query_paginated_result, self.url_listings)
 		q = 111
@@ -41,12 +46,13 @@ class TestListingCreation(BaseListingsTest):
 		make(price=0, title="++TEST++")
 		make(price=10, condition_new=True)
 		make(price=20, seller=self.user.profile)
-		max_q = q * 3
+		make(price=30, category=self.category)
+		max_q = q * 4
 		self.assertEqual(listing_model.objects.count(), max_q)
 
 		check_result({}, max_q)
 		check_result({'min_price': 10}, max_q - q)
-		check_result({'max_price': 10}, max_q - q)
+		check_result({'max_price': 10}, max_q - q * 2)
 		check_result({'min_price': 10, 'max_price': 10}, q)
 		check_result({'min_price': 20, 'max_price': 10}, 0)
 
@@ -62,19 +68,23 @@ class TestListingCreation(BaseListingsTest):
 		check_result({'seller': uuid, 'max_price': 10}, 0)
 		check_result({'seller': uuid, 'min_price': 10}, q)
 
+		check_result({'category': "NotExist"}, 0)
+		check_result({'category': self.category.name}, q)
+		check_result({'max_price': 25, 'category': self.category.name}, 0)
+		check_result({'min_price': 25, 'category': self.category.name}, q)
+
 		data = {'min_price': 5, 'order_by': 'price'}
 		first_page, last_page = check_result(data, max_q - q)
 		self.assertEqual(first_page.data['results'][0]['price'], 10)
-		self.assertEqual(last_page.data['results'][-1]['price'], 20)
+		self.assertEqual(last_page.data['results'][-1]['price'], 30)
 
 		data = {'max_price': 15, 'order_by': '-rating'}
-		first_page, last_page = check_result(data, max_q - q)
+		first_page, last_page = check_result(data, max_q - q * 2)
 		self.assertEqual(first_page.data['results'][0]['price'], 10)
 		self.assertEqual(last_page.data['results'][-1]['price'], 0)
 
 	def test_create(self):
-		category_model.objects.create(name='valid_category')
-		data = {'title': "Test", 'price': 100, 'category': 'valid_category'}
+		data = {'title': "Test", 'price': 100, 'category': self.category.name}
 		# who are you?
 		self.POST(self.url_listings, HTTP_401_UNAUTHORIZED, data)
 		self.assertEqual(listing_model.objects.count(), 0)
@@ -86,12 +96,11 @@ class TestListingCreation(BaseListingsTest):
 
 	def test_categories(self):
 		self.authorize()
-		parent = category_model.objects.create(name='parent')
-		data = {'title': "Test", 'price': 100, 'category': parent.name}
+		data = {'title': "Test", 'price': 100, 'category': self.category.name}
 		self.POST(self.url_listings, HTTP_201_CREATED, data)
 		self.assertEqual(listing_model.objects.count(), 1)
 		# can no longer assign to parent categories if it has children
-		child = category_model.objects.create(name='child', parent=parent)
+		child = category_model.objects.create(name='child', parent=self.category)
 		self.POST(self.url_listings, HTTP_400_BAD_REQUEST, data)
 		self.assertEqual(listing_model.objects.count(), 1)
 		# children category are ok though
@@ -106,14 +115,13 @@ class TestListingCreation(BaseListingsTest):
 		self.assertIn('category', response.data)
 		self.assertEqual(response.data['category'], '__uncategorized__')
 		# parent category is now acceptable again
-		data['category'] = parent.name
+		data['category'] = self.category.name
 		self.POST(self.url_listings, HTTP_201_CREATED, data)
 		self.assertEqual(listing_model.objects.count(), 3)
 
 	def test_invalid_creation(self):
 		self.authorize()
-		valid_category = category_model.objects.create(name='valid_category')
-		listing = baker.prepare('Listing', category=valid_category)
+		listing = baker.prepare('Listing', category=self.category)
 		data = listing_serializer(listing).data
 		# data is valid
 		self.POST(self.url_listings, HTTP_201_CREATED, data)
@@ -152,17 +160,23 @@ class TestListingEdit(BaseListingsTest):
 			('condition_new', not self.listing.condition_new),
 			('title', "New Title"),
 			('description', "New description."),
+			('category', category_model.objects.create(name='valid_cat').name),
 		):
 			response = self.PATCH(self.listing_url, HTTP_200_OK, {field: new_value})
 			self.assertIn(field, response.data)
 			self.assertEqual(response.data[field], new_value)
 			self.listing.refresh_from_db()
-			self.assertEqual(getattr(self.listing, field), new_value)
+			serialized = listing_serializer(self.listing)
+			self.assertEqual(serialized.data[field], new_value)
 		# update all at once
-		alter = baker.prepare('Listing')
-		data = {field: getattr(alter, field) for field in self.fields_to_test}
-		response = self.PATCH(self.listing_url, HTTP_200_OK, data)
-		self.assertDictContainsSubset(data, response.data)
+		new_category = category_model.objects.create(name='another_valid_cat')
+		alter = baker.prepare('Listing', category=new_category)
+		serialized_alter = listing_serializer(alter)
+		data = {field: serialized_alter.data[field] for field in self.fields_to_test}
+		patch_response = self.PATCH(self.listing_url, HTTP_200_OK, data)
+		self.assertDictContainsSubset(data, patch_response.data)
+		get_response = self.GET(self.listing_url, HTTP_200_OK)
+		self.assertEqual(patch_response.data, get_response.data)
 
 	def test_invalid_update(self):
 		# who are you?
@@ -203,6 +217,8 @@ class TestListingFull(BaseListingsTest):
 	"""Test all Listing actions together."""
 
 	def test_listing_actions(self):
+		category1 = category_model.objects.create(name='cat1')
+		category2 = category_model.objects.create(name='cat2')
 		listings_urls = []
 		users = []
 		for q in range(1, 11):
@@ -213,21 +229,30 @@ class TestListingFull(BaseListingsTest):
 			for url in listings_urls:
 				response = self.GET(url, HTTP_200_OK)
 			# create new listing
-			listing = baker.prepare('Listing')
-			data = {field: getattr(listing, field) for field in self.fields_to_test}
+			generated_listing = baker.prepare('Listing', category=category1)
+			prepared_data = listing_serializer(generated_listing).data
+			data = {field: prepared_data[field] for field in self.fields_to_test}
 			response = self.POST(self.url_listings, HTTP_201_CREATED, data)
 			self.assertDictContainsSubset(data, response.data)
 			self.assertEqual(listing_model.objects.count(), q)
 			# edit listing
 			url = self.url_details(args=(response.data['uuid'],))
 			listings_urls.append(url)
-			alter_listing = baker.prepare('Listing', price=12345)
+			alter_listing = baker.prepare('Listing', price=12345, category=category2)
+			prepared_data = listing_serializer(alter_listing).data
 			for field in self.fields_to_test:
-				alter_data = {field: getattr(alter_listing, field)}
-				response = self.PATCH(url, HTTP_200_OK, alter_data)
-				self.assertDictContainsSubset(alter_data, response.data)
+				response = self.PATCH(url, HTTP_200_OK, {field: prepared_data[field]})
+				if field in self.fields_to_test:
+					self.assertEqual(prepared_data[field], response.data[field])
+				else:
+					self.assertNotEqual(prepared_data[field], response.data[field])
 			# search for some listing
-			query_data = {'min_price': 12345, 'max_price': 12345}
+			query_data = {
+				'min_price': 12345,
+				'max_price': 12345,
+				'category': category2.name,
+				'order_by': '-category'
+			}
 			self.query_paginated_result(self.url_listings, query_data, q)
 		# then delete
 		how_many = len(listings_urls)
