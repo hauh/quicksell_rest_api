@@ -4,13 +4,36 @@ import uuid
 from datetime import datetime, timedelta
 
 from django.db.models import (
-	CASCADE, SET_NULL,
-	CharField, BooleanField, DateTimeField, ForeignKey, ImageField,
-	IntegerChoices, JSONField, PositiveIntegerField, PositiveSmallIntegerField,
-	SmallIntegerField, TextField, UUIDField
+	CASCADE, SET, SET_NULL, BooleanField, CharField, DateTimeField, ForeignKey,
+	ImageField, IntegerChoices, JSONField, PositiveIntegerField,
+	PositiveSmallIntegerField, SmallIntegerField, TextField, UUIDField
 )
+from mptt.models import MPTTModel, TreeForeignKey
 
 from .basemodel import QuicksellModel
+
+
+class Category(MPTTModel):
+	"""Listing's categories."""
+
+	name = CharField(max_length=64, unique=True)
+	parent = TreeForeignKey(
+		'self', related_name='children',
+		null=True, blank=True, on_delete=CASCADE
+	)
+
+	class Meta:
+		verbose_name_plural = 'categories'
+
+	class MPTTMeta:  # pylint: disable=missing-class-docstring
+		order_insertion_by = ['name']
+
+	def __str__(self):
+		return self.name
+
+
+def uncategorized():
+	return Category.objects.get_or_create(name='__uncategorized__')[0].id
 
 
 def default_expiration_date():
@@ -29,22 +52,11 @@ class Listing(QuicksellModel):
 		closed = 3, 'Closed'
 		deleted = 4, 'Deleted'
 
-	class Category(IntegerChoices):
-		"""Listing's categories."""
-
-		phones = 1, 'Телефоны и планшеты'
-		furnishings = 2, 'For houses and dachas'
-		belongings = 3, 'Personal belongings'
-		hobby = 4, 'Hobby'
-		animals = 5, 'Animals'
-		electronics = 6, 'Electronics'
-		services = 7, 'Sevrvices'
-
 	uuid = UUIDField(default=uuid.uuid4, unique=True, editable=False)
 	title = CharField(max_length=200)
 	description = TextField(null=True, blank=True)
 	price = PositiveIntegerField()
-	category = PositiveSmallIntegerField(choices=Category.choices)
+	category = ForeignKey('Category', on_delete=SET(uncategorized))
 	status = PositiveSmallIntegerField(choices=Status.choices, default=0)
 	quantity = PositiveIntegerField(default=1)
 	sold = PositiveIntegerField(default=0)

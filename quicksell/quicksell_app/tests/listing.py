@@ -3,18 +3,15 @@
 from functools import partial
 
 from django.urls import reverse
-
-from rest_framework.status import (
-	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT,
-	HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED,
-	HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
-)
-
 from model_bakery import baker
-
+from quicksell_app.models import Category as category_model
+from quicksell_app.models import Listing as listing_model
 from quicksell_app.serializers import Base64UUIDField
 from quicksell_app.serializers import Listing as listing_serializer
-from quicksell_app.models import Listing as listing_model
+from rest_framework.status import (
+	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST,
+	HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
+)
 
 from .basetest import BaseTest
 
@@ -76,7 +73,8 @@ class TestListingCreation(BaseListingsTest):
 		self.assertEqual(last_page.data['results'][-1]['price'], 0)
 
 	def test_create(self):
-		data = {'title': "Test", 'price': 100, 'category': 1}
+		category_model.objects.create(name='valid_category')
+		data = {'title': "Test", 'price': 100, 'category': 'valid_category'}
 		# who are you?
 		self.POST(self.url_listings, HTTP_401_UNAUTHORIZED, data)
 		self.assertEqual(listing_model.objects.count(), 0)
@@ -86,12 +84,42 @@ class TestListingCreation(BaseListingsTest):
 		self.assertEqual(listing_model.objects.count(), 1)
 		self.assertDictContainsSubset(data, response.data)
 
+	def test_categories(self):
+		self.authorize()
+		parent = category_model.objects.create(name='parent')
+		data = {'title': "Test", 'price': 100, 'category': parent.name}
+		self.POST(self.url_listings, HTTP_201_CREATED, data)
+		self.assertEqual(listing_model.objects.count(), 1)
+		# can no longer assign to parent categories if it has children
+		child = category_model.objects.create(name='child', parent=parent)
+		self.POST(self.url_listings, HTTP_400_BAD_REQUEST, data)
+		self.assertEqual(listing_model.objects.count(), 1)
+		# children category are ok though
+		data['category'] = child.name
+		response = self.POST(self.url_listings, HTTP_201_CREATED, data)
+		self.assertEqual(listing_model.objects.count(), 2)
+		self.assertIn('uuid', response.data)
+		listing_url = self.url_details(args=(response.data['uuid'],))
+		# if category was deleted
+		child.delete()
+		response = self.GET(listing_url, HTTP_200_OK)
+		self.assertIn('category', response.data)
+		self.assertEqual(response.data['category'], '__uncategorized__')
+		# parent category is now acceptable again
+		data['category'] = parent.name
+		self.POST(self.url_listings, HTTP_201_CREATED, data)
+		self.assertEqual(listing_model.objects.count(), 3)
+
 	def test_invalid_creation(self):
 		self.authorize()
-		listing = baker.prepare('Listing')
+		valid_category = category_model.objects.create(name='valid_category')
+		listing = baker.prepare('Listing', category=valid_category)
 		data = listing_serializer(listing).data
-		# required fields
-		for field in ('price', 'title'):
+		# data is valid
+		self.POST(self.url_listings, HTTP_201_CREATED, data)
+		self.assertEqual(listing_model.objects.count(), 1)
+		# missing required fields
+		for field in ('price', 'title', 'category'):
 			invalid_data = {**data}
 			invalid_data.pop(field)
 			self.POST(self.url_listings, HTTP_400_BAD_REQUEST, invalid_data)
@@ -100,6 +128,7 @@ class TestListingCreation(BaseListingsTest):
 			{'price': -1}, {'price': None},
 			{'title': ""}, {'title': None},
 			{'condition_new': None},
+			{'category': None}, {'category': "NotExist"},
 		):
 			self.POST(self.url_listings, HTTP_400_BAD_REQUEST, {**data, **invalid})
 

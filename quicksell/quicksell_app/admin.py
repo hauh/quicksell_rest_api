@@ -1,11 +1,12 @@
 """Admin."""
 
 from django.apps import apps
-from django.urls import reverse
 from django.contrib import admin, auth
+from django.urls import reverse
 from django.utils.html import format_html
+from mptt.admin import MPTTModelAdmin
 
-from quicksell_app.models import User
+from quicksell_app.models import Category, User
 
 
 class UserAdmin(auth.admin.UserAdmin):
@@ -55,6 +56,7 @@ class UserAdmin(auth.admin.UserAdmin):
 
 
 admin.site.register(User, UserAdmin)
+admin.site.register(Category, MPTTModelAdmin)
 
 for model in apps.get_models():
 	try:

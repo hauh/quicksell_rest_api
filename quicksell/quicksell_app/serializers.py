@@ -2,12 +2,11 @@
 
 from uuid import UUID
 
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.auth import password_validation
-
-from rest_framework.serializers import ModelSerializer
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.fields import Field, IntegerField
-from rest_framework.exceptions import NotFound
+from rest_framework.serializers import ModelSerializer
 
 from quicksell_app import models
 
@@ -63,12 +62,29 @@ class User(ModelSerializer):
 		return self.Meta.model.objects.create_user(**validated_data)
 
 
+class CategoryField(Field):
+	"""Listing's category."""
+
+	def to_representation(self, category):
+		return category.name
+
+	def to_internal_value(self, category_name):
+		try:
+			category = models.Category.objects.get(name=category_name)
+		except models.Category.DoesNotExist as err:
+			raise ValidationError("Category doesn't exist.") from err
+		if not category.is_leaf_node():
+			raise ValidationError("Category should be at lowest level.")
+		return category
+
+
 class Listing(ModelSerializer):
 	"""Listing info."""
 
 	uuid = Base64UUIDField(read_only=True)
 	price = IntegerField(min_value=0)
 	seller = Profile(read_only=True)
+	category = CategoryField()
 
 	class Meta:
 		model = models.Listing

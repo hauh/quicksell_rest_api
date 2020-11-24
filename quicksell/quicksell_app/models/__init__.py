@@ -1,4 +1,4 @@
 """Models."""
 
-from .user import User, Profile, BusinessAccount
-from .listing import Listing
+from .listing import Category, Listing
+from .user import BusinessAccount, Profile, User
