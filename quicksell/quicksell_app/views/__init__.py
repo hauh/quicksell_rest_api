@@ -1,6 +1,7 @@
 """Views."""
 
-from .user import User, EmailConfirm
-from .profile import Profile, ProfileDetail
-from .password import Password
+from .info import Info
 from .listing import Listing, ListingDetail
+from .password import Password
+from .profile import Profile, ProfileDetail
+from .user import EmailConfirm, User

@@ -1,13 +1,11 @@
 """Endpoints."""
 
-from django.urls import path, include
-
-from rest_framework.routers import DefaultRouter
+from django.urls import include, path
 from rest_framework.authtoken.views import obtain_auth_token
+from rest_framework.routers import DefaultRouter
 
 from quicksell_app import views
 from quicksell_app.schema import schema_view
-
 
 router = DefaultRouter()
 
@@ -16,6 +14,7 @@ urlpatterns = router.urls + [
 		path('redoc/', schema_view.with_ui('redoc'), name='schema-redoc'),
 		path('swagger/', schema_view.with_ui('swagger'), name='schema-swagger'),
 	])),
+	path('info/', views.Info.as_view(), name='info'),
 	path('users/', include([
 		path('', views.User.as_view(), name='user'),
 		path('login/', obtain_auth_token, name='login'),
