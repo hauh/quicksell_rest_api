@@ -14,11 +14,11 @@ services:
     build: .
     image: 'quicksell'
     container_name: 'quicksell_app'
-    command: python quicksell/manage.py runserver 0.0.0.0:8000
+    command: sh -c "postfix start; python manage.py runserver 0.0.0.0:8000"
     ports:
       - 7777:8000
     volumes:
-      - ./quicksell:/opt/app/quicksell
+      - ./quicksell:/opt/app
     env_file: 'env'
     restart: always
     depends_on:

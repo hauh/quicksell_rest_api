@@ -158,8 +158,8 @@ REST_FRAMEWORK = {
 
 DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.ru>'
 EMAIL_HOST = 'localhost'
-EMAIL_PORT = 1025
-# EMAIL_USE_TLS = True
+EMAIL_PORT = 25
+EMAIL_USE_TLS = False
 
 
 SWAGGER_SETTINGS = {
