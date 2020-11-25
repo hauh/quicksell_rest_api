@@ -1,5 +1,6 @@
 """Info about API settings."""
 
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK
@@ -21,6 +22,13 @@ class Info(GenericAPIView):
 	queryset = category_model.objects.exclude(name='__uncategorized__')
 	pagination_class = None
 
+	@swagger_auto_schema(
+		operation_id='info',
+		operation_summary='API Info',
+		operation_description="Returns Categories tree.",
+		security=[],
+		responses={HTTP_200_OK: "Nested JSON with Categories."}
+	)
 	def get(self, _request):
 		categories = self.get_queryset().values('id', 'parent', 'name')
 		tree = build_tree(categories, None)
