@@ -17,6 +17,7 @@ MarkupSafe==1.1.1
 model-bakery==1.2.1
 packaging==20.4
 Pillow==8.0.1
+psycopg2==2.8.6
 pyparsing==2.4.7
 pytz==2020.4
 requests==2.25.0
