@@ -1,10 +1,9 @@
 """Schema generation with drf_yasg."""
 
-from rest_framework.serializers import ModelSerializer
 from drf_yasg.inspectors import SwaggerAutoSchema
-from drf_yasg.openapi import Schema, Info, License
+from drf_yasg.openapi import Info, License
 from drf_yasg.views import get_schema_view
-from drf_yasg.utils import force_serializer_instance
+from drf_yasg.utils import no_body
 
 
 schema_info = Info(
@@ -15,59 +14,52 @@ schema_info = Info(
 schema_view = get_schema_view(schema_info, public=True)
 
 
-class NoRefNameMeta:
-	"""Serializers with this Meta won't be defined and referenced."""
-	ref_name = None
+class Read():
+	"""Serializer without write_only fields."""
+
+	def get_fields(self):
+		return {
+			field_name: field
+			for field_name, field in super().get_fields().items()
+			if not field.write_only
+		}
+
+
+class Write():
+	"""Serializer without read_only fields."""
+
+	def get_fields(self):
+		return {
+			field_name: field
+			for field_name, field in super().get_fields().items()
+			if not field.read_only
+		}
+
+
+class BlankMeta:
+	"""For serializers without Meta."""
 
 
 class FilteringFieldsAutoSchema(SwaggerAutoSchema):
-	"""Custom schema generator.
-	Excludes non-model serializer from definitions.
-	Filters out `read_only` fields in request body and `write_only` in response.
-	"""
+	"""Splitting serializer into read and write serializers."""
 
-	implicit_body_methods = ('PUT', 'PATCH', 'POST', 'DELETE')
+	def convert_serializer(self, new_class):
+		serializer = super().get_view_serializer()
+		if not serializer:
+			return serializer
 
-	def serializer_to_schema(self, serializer):
-		if not isinstance(serializer, ModelSerializer):
-			if not hasattr(serializer, 'Meta'):
-				setattr(serializer, 'Meta', NoRefNameMeta)
-			elif not hasattr(serializer.Meta, 'ref_name'):
-				setattr(serializer.Meta, 'ref_name', None)
-		return super().serializer_to_schema(serializer)
+		class SeparatedFieldsSerializer(new_class, serializer.__class__):
+			"""Generated serializer."""
+			class Meta(getattr(serializer.__class__, 'Meta', BlankMeta)):
+				ref_name = f"{serializer.__class__.__name__} {new_class.__name__}"
 
-	def get_request_body_schema(self, serializer):
-		schema = self.serializer_to_schema(serializer)
-		if isinstance(schema, Schema):
-			for name, field in serializer.fields.items():
-				if field.read_only:
-					schema['properties'].pop(name)
-		return schema
+		return SeparatedFieldsSerializer(data=serializer.data)
 
-	def get_response_schemas(self, response_serializers):
-		processed_serializers = {}
-		for sc, serializer in response_serializers.items():
-			try:
-				serializer_instance = force_serializer_instance(serializer)
-			except AssertionError:
-				processed_serializers[sc] = serializer
-				continue
+	def get_view_serializer(self):
+		return self.convert_serializer(Write)
 
-			schema = self.serializer_to_schema(serializer_instance)
-			if isinstance(schema, Schema):
-				for name, field in serializer_instance.fields.items():
-					if field.write_only:
-						schema['properties'].pop(name)
-
-				if 'required' in schema:
-					filtered_required = [
-						name for name in schema['required']
-						if name in schema['properties']
-					]
-					if filtered_required:
-						schema['required'] = filtered_required
-					else:
-						schema.pop('required')
-			processed_serializers[sc] = schema
-
-		return super().get_response_schemas(processed_serializers)
+	def get_default_response_serializer(self):
+		body_override = self._get_request_body_override()
+		if body_override and body_override is not no_body:
+			return body_override
+		return self.convert_serializer(Read)

@@ -9,6 +9,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.fields import CharField, Field, IntegerField
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
+from drf_yasg.utils import swagger_serializer_method
 
 from quicksell_app import models
 
@@ -139,6 +140,7 @@ class Chat(ModelSerializer):
 		)
 		read_only_fields = fields
 
+	@swagger_serializer_method(Profile)
 	def get_interlocutor(self, chat_object):
 		if self.context['request'].user != chat_object.creator:
 			interlocutor_profile = chat_object.creator.profile
@@ -146,6 +148,7 @@ class Chat(ModelSerializer):
 			interlocutor_profile = chat_object.interlocutor.profile
 		return Profile(interlocutor_profile, context=self.context).data
 
+	@swagger_serializer_method(Message)
 	def get_latest_message(self, chat_object):
 		latest_message = chat_object.messages.latest('timestamp')
 		return Message(latest_message, context=self.context).data
