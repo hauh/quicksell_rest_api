@@ -1,6 +1,6 @@
 """Views."""
 
-from .chat import Chat
+from .chat import Chat, Message
 from .info import Info
 from .listing import Listing, ListingDetail
 from .password import Password

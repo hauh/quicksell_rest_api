@@ -3,13 +3,12 @@
 from django.conf import settings
 from model_bakery import baker
 
-from .user import (
-	TestAuthentication, TestUserCreation, TestEmailConfirmation,
-	TestPasswordActions, TestProfileActions, TestUserFull
-)
+from .chat import TestChat, TestMessage
 from .listing import TestListingCreation, TestListingEdit, TestListingFull
-from .chat import TestChat
-
+from .user import (
+	TestAuthentication, TestEmailConfirmation, TestPasswordActions,
+	TestProfileActions, TestUserCreation, TestUserFull
+)
 
 settings.PASSWORD_HASHERS = ('django.contrib.auth.hashers.MD5PasswordHasher',)
 settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'

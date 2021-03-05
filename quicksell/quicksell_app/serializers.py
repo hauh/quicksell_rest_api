@@ -106,14 +106,14 @@ class Listing(ModelSerializer):
 class Message(ModelSerializer):
 	"""Chat's message serializer."""
 
-	yours = SerializerMethodField()
+	is_yours = SerializerMethodField()
 
 	class Meta:
 		model = models.Message
-		fields = 'yours', 'text', 'date_sent', 'read'
-		read_only_fields = fields
+		fields = 'is_yours', 'text', 'timestamp', 'read'
+		read_only_fields = 'is_yours', 'timestamp', 'read'
 
-	def get_yours(self, message_object):
+	def get_is_yours(self, message_object):
 		return self.context['request'].user == message_object.author
 
 
@@ -147,7 +147,7 @@ class Chat(ModelSerializer):
 		return Profile(interlocutor_profile, context=self.context).data
 
 	def get_latest_message(self, chat_object):
-		latest_message = chat_object.messages.latest('date_sent')
+		latest_message = chat_object.messages.latest('timestamp')
 		return Message(latest_message, context=self.context).data
 
 	def create(self, val_data):

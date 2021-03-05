@@ -38,5 +38,5 @@ class Message(QuicksellModel):
 		'User', related_name='+', on_delete=CASCADE, editable=False
 	)
 	text = TextField(max_length=2000)
-	date_sent = DateTimeField(auto_now_add=True)
+	timestamp = DateTimeField(auto_now_add=True)
 	read = BooleanField(default=False)

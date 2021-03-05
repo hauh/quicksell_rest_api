@@ -35,5 +35,6 @@ urlpatterns = router.urls + [
 	])),
 	path('chats/', include([
 		path('', views.Chat.as_view(), name='chat'),
+		path('<str:base64uuid>/', views.Message.as_view(), name='message'),
 	]))
 ]
