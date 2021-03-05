@@ -10,6 +10,7 @@ from rest_framework.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 from model_bakery import baker
 
 from quicksell_app.models import User
+from quicksell_app.serializers import Base64UUIDField
 
 
 class BaseTest(APITestCase):
@@ -52,6 +53,9 @@ class BaseTest(APITestCase):
 		self.user.set_password(self.user.password)
 		self.user.save()
 		self.user.refresh_from_db()
+
+	def base64uuid(self, uuid_value):
+		return Base64UUIDField().to_representation(uuid_value)
 
 	def authorize(self, user=None):
 		token = Token.objects.get_or_create(user=user or self.user)

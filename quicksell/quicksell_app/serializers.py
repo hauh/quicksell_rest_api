@@ -3,10 +3,12 @@
 from uuid import UUID
 
 from django.contrib.auth import password_validation
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.fields import Field, IntegerField
-from rest_framework.serializers import ModelSerializer
+from rest_framework.fields import CharField, Field, IntegerField
+from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
 from quicksell_app import models
 
@@ -99,3 +101,67 @@ class Listing(ModelSerializer):
 			'date_expires', 'seller', 'shop', 'photos'
 		)
 		ordering = 'created'
+
+
+class Message(ModelSerializer):
+	"""Chat's message serializer."""
+
+	yours = SerializerMethodField()
+
+	class Meta:
+		model = models.Message
+		fields = 'yours', 'text', 'date_sent', 'read'
+		read_only_fields = fields
+
+	def get_yours(self, message_object):
+		return self.context['request'].user == message_object.author
+
+
+class Chat(ModelSerializer):
+	"""Chat serializer."""
+
+	# POST
+	text = CharField(write_only=True)
+	to_uuid = Base64UUIDField(write_only=True)
+	listing_uuid = Base64UUIDField(write_only=True)
+
+	# GET
+	uuid = Base64UUIDField(read_only=True)
+	interlocutor = SerializerMethodField()
+	listing = Listing(read_only=True)
+	latest_message = SerializerMethodField()
+
+	class Meta:
+		model = models.Chat
+		fields = (
+			'to_uuid', 'listing_uuid', 'text',
+			'uuid', 'subject', 'interlocutor', 'listing', 'latest_message'
+		)
+		read_only_fields = fields
+
+	def get_interlocutor(self, chat_object):
+		if self.context['request'].user != chat_object.creator:
+			interlocutor_profile = chat_object.creator.profile
+		else:
+			interlocutor_profile = chat_object.interlocutor.profile
+		return Profile(interlocutor_profile, context=self.context).data
+
+	def get_latest_message(self, chat_object):
+		latest_message = chat_object.messages.latest('date_sent')
+		return Message(latest_message, context=self.context).data
+
+	def create(self, val_data):
+		creator = self.context['request'].user
+		to_user = get_object_or_404(models.Profile, uuid=val_data['to_uuid']).user
+		listing = get_object_or_404(models.Listing, uuid=val_data['listing_uuid'])
+		with transaction.atomic():
+			new_chat = models.Chat.objects.create(
+				creator=creator,
+				interlocutor=to_user,
+				listing=listing,
+				subject=listing.title
+			)
+			models.Message.objects.create(
+				text=val_data['text'], author=creator, chat=new_chat
+			)
+		return new_chat

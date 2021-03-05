@@ -1,4 +1,4 @@
-"""Listings testing."""
+"""Listings tests."""
 
 from functools import partial
 
@@ -11,7 +11,6 @@ from rest_framework.status import (
 
 from quicksell_app.models import Category as category_model
 from quicksell_app.models import Listing as listing_model
-from quicksell_app.serializers import Base64UUIDField
 from quicksell_app.serializers import Listing as listing_serializer
 
 from .basetest import BaseTest
@@ -63,7 +62,7 @@ class TestListingCreation(BaseListingsTest):
 		check_result({'condition_new': True}, q)
 		check_result({'condition_new': False}, max_q - q)
 
-		uuid = Base64UUIDField().to_representation(self.user.profile.uuid)
+		uuid = self.base64uuid(self.user.profile.uuid)
 		check_result({'seller': uuid}, q)
 		check_result({'seller': uuid, 'max_price': 10}, 0)
 		check_result({'seller': uuid, 'min_price': 10}, q)
@@ -149,7 +148,7 @@ class TestListingEdit(BaseListingsTest):
 	def setUp(self):
 		super().setUp()
 		self.listing = baker.make('Listing', seller=self.user.profile)
-		uuid = Base64UUIDField().to_representation(self.listing.uuid)
+		uuid = self.base64uuid(self.listing.uuid)
 		self.listing_url = self.url_details(args=(uuid,))
 
 	def test_update(self):
@@ -185,7 +184,7 @@ class TestListingEdit(BaseListingsTest):
 		self.authorize()
 		anothers_listing = baker.make('Listing', make_m2m=True)
 		self.assertEqual(listing_model.objects.count(), 2)
-		uuid = Base64UUIDField().to_representation(anothers_listing.uuid)
+		uuid = self.base64uuid(anothers_listing.uuid)
 		self.PATCH(self.url_details(args=(uuid,)), HTTP_403_FORBIDDEN, {'price': 1})
 		# invalid data
 		for field, invalid_value in (
@@ -208,7 +207,7 @@ class TestListingEdit(BaseListingsTest):
 		self.assertEqual(listing_model.objects.count(), 0)
 		anothers_listing = baker.make('Listing', make_m2m=True)
 		self.assertEqual(listing_model.objects.count(), 1)
-		uuid = Base64UUIDField().to_representation(anothers_listing.uuid)
+		uuid = self.base64uuid(anothers_listing.uuid)
 		self.DELETE(self.url_details(args=(uuid,)), HTTP_403_FORBIDDEN)
 		self.assertEqual(listing_model.objects.count(), 1)
 
@@ -229,8 +228,9 @@ class TestListingFull(BaseListingsTest):
 			for url in listings_urls:
 				response = self.GET(url, HTTP_200_OK)
 			# create new listing
-			generated_listing = baker.prepare('Listing', category=category1)
-			prepared_data = listing_serializer(generated_listing).data
+			prepared_data = listing_serializer(
+				baker.prepare('Listing', category=category1)
+			).data
 			data = {field: prepared_data[field] for field in self.fields_to_test}
 			response = self.POST(self.url_listings, HTTP_201_CREATED, data)
 			self.assertDictContainsSubset(data, response.data)

@@ -8,6 +8,7 @@ from .user import (
 	TestPasswordActions, TestProfileActions, TestUserFull
 )
 from .listing import TestListingCreation, TestListingEdit, TestListingFull
+from .chat import TestChat
 
 
 settings.PASSWORD_HASHERS = ('django.contrib.auth.hashers.MD5PasswordHasher',)
