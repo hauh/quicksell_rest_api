@@ -1,18 +1,20 @@
 """Common testing patterns."""
 
 from django.conf import settings
-
-from rest_framework.test import APITestCase
-from rest_framework.settings import api_settings
-from rest_framework.authtoken.models import Token
-from rest_framework.status import HTTP_200_OK, HTTP_404_NOT_FOUND
-
 from model_bakery import baker
+from rest_framework.authtoken.models import Token
+from rest_framework.settings import api_settings
+from rest_framework.status import HTTP_200_OK, HTTP_404_NOT_FOUND
+from rest_framework.test import APITestCase, override_settings
 
 from quicksell_app.models import User
 from quicksell_app.serializers import Base64UUIDField
 
 
+@override_settings(
+	PASSWORD_HASHERS=('django.contrib.auth.hashers.MD5PasswordHasher',),
+	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+)
 class BaseTest(APITestCase):
 	"""Base class for API tests."""
 

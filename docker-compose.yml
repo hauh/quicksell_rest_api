@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.9'
 
 services:
 
@@ -7,20 +7,25 @@ services:
     container_name: 'quicksell_db'
     volumes:
       - db_data:/var/lib/postgresql/data
-    env_file: 'env'
+    env_file: '.env'
     restart: always
 
   app:
     build: .
     image: 'quicksell'
     container_name: 'quicksell_app'
-    command: sh -c "postfix start; python manage.py runserver 0.0.0.0:8000"
+    command: >
+      sh -c "
+        postfix start ;
+        python manage.py makemigrations ;
+        python manage.py migrate ;
+        python manage.py test &&
+        python manage.py runserver 0.0.0.0:8000
+      "
     ports:
-      - 7777:8000
-    volumes:
-      - ./quicksell:/opt/app
-    env_file: 'env'
-    restart: always
+      - ${PORT}:8000
+    env_file: '.env'
+    # restart: always
     depends_on:
       - db
 

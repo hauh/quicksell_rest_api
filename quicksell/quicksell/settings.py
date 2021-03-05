@@ -90,26 +90,24 @@ DATABASES = {
 		'PASSWORD': os.environ['POSTGRES_PASSWORD'],
 		'HOST': 'quicksell_db',
 		'PORT': 5432,
-	},
 
+		# # for tests
+		# 'ENGINE': 'django.db.backends.sqlite3',
+		# 'NAME': 'test_db',
+	},
 }
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-	{
-		'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',  # noqa
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-	},
+	{'NAME': 'django.contrib.auth.password_validation.' + validator_name}
+	for validator_name in (
+		'UserAttributeSimilarityValidator',
+		'MinimumLengthValidator',
+		'CommonPasswordValidator',
+		'NumericPasswordValidator',
+	)
 ]
 
 
