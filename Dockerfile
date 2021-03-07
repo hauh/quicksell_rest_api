@@ -8,3 +8,5 @@ WORKDIR /opt/app
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip && pip install -r requirements.txt
 COPY quicksell .
+COPY entrypoint.sh .
+ENTRYPOINT ["./entrypoint.sh"]
