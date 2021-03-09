@@ -13,6 +13,7 @@ urlpatterns = router.urls + [
 	path('doc/', include([
 		path('redoc/', schema_view.with_ui('redoc'), name='schema-redoc'),
 		path('swagger/', schema_view.with_ui('swagger'), name='schema-swagger'),
+		path('silk/', include('silk.urls', namespace='silk')),
 	])),
 	path('info/', views.Info.as_view(), name='info'),
 	path('users/', include([

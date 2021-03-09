@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 	'rest_framework.authtoken',
 	'mptt',
 	'drf_yasg',
+	'silk',
 
 	'quicksell_app',
 ]
@@ -51,6 +52,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
 	'django.middleware.security.SecurityMiddleware',
 	'whitenoise.middleware.WhiteNoiseMiddleware',
+	'silk.middleware.SilkyMiddleware',
+
 	'django.contrib.sessions.middleware.SessionMiddleware',
 	'django.middleware.common.CommonMiddleware',
 	'django.middleware.csrf.CsrfViewMiddleware',

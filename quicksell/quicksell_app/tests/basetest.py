@@ -1,6 +1,7 @@
 """Common testing patterns."""
 
 from django.conf import settings
+from django.test.utils import modify_settings
 from model_bakery import baker
 from rest_framework.authtoken.models import Token
 from rest_framework.settings import api_settings
@@ -14,6 +15,9 @@ from quicksell_app.serializers import Base64UUIDField
 @override_settings(
 	PASSWORD_HASHERS=('django.contrib.auth.hashers.MD5PasswordHasher',),
 	EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+)
+@modify_settings(
+	MIDDLEWARE={'remove': 'silk.middleware.SilkyMiddleware'}
 )
 class BaseTest(APITestCase):
 	"""Base class for API tests."""
