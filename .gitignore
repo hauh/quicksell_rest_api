@@ -5,3 +5,4 @@ migrations/
 quicksell/schema.yaml
 .coverage
 categories.yaml
+quicksell/test_db

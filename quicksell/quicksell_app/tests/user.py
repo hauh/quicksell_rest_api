@@ -33,6 +33,12 @@ class BaseUserTest(BaseTest):
 	good_mail = "test@good.mail"
 	good_pass = "!@34GoodPass"
 	good_pass2 = "New$#21Pass"
+	valid_reg_data = {
+		'email': good_mail,
+		'password': good_pass,
+		'full_name': "Qucksell User",
+		'fcm_id': 'some_fcm_id' * 10
+	}
 
 	def valid_email_variants(self, email):
 		for variant in (
@@ -77,8 +83,7 @@ class TestUserCreation(BaseUserTest):
 
 	def test_create_user(self):
 		self.assertEqual(self.user_model.objects.count(), 0)
-		data = {'email': self.good_mail, 'password': self.good_pass}
-		response = self.POST(self.url_user, HTTP_201_CREATED, data)
+		response = self.POST(self.url_user, HTTP_201_CREATED, self.valid_reg_data)
 		self.assertEqual(self.user_model.objects.count(), 1)
 		user = self.user_model.objects.get(email=response.data['email'])
 		self.assertDictEqual(response.data, user_serializer(user).data)
@@ -86,7 +91,7 @@ class TestUserCreation(BaseUserTest):
 		self.assertEqual(len(mail.outbox), 1)
 		email = mail.outbox[0]
 		self.assertEqual(email.from_email, self.emails_from)
-		self.assertEqual(email.to, [data['email']])
+		self.assertEqual(email.to, [self.valid_reg_data['email']])
 		self.assertEqual(email.subject, "Activate Your Quicksell Account")
 		self.assertTrue(email.body.startswith("Click the link to confirm"))
 
@@ -130,8 +135,7 @@ class TestEmailConfirmation(BaseUserTest):
 
 	def test_confirm_email(self):
 		# registering new user
-		data = {'email': self.good_mail, 'password': self.good_pass}
-		response = self.POST(self.url_user, HTTP_201_CREATED, data)
+		response = self.POST(self.url_user, HTTP_201_CREATED, self.valid_reg_data)
 		self.assertIn('email', response.data)
 		user = self.user_model.objects.get(email=response.data['email'])
 		self.assertFalse(user.is_email_verified)
@@ -394,7 +398,9 @@ class TestUserFull(BaseUserTest):
 		user_count = 100
 		for i in range(1, user_count):
 			# create user
-			data = {'email': str(i) + self.good_mail, 'password': self.good_pass}
+			data = {**self.valid_reg_data}
+			for key in ('email', 'fcm_id'):
+				data[key] += str(i)
 			response = self.POST(self.url_user, HTTP_201_CREATED, data)
 			user = self.user_model.objects.get(email=data['email'])
 			self.assertDictEqual(response.data, user_serializer(user).data)

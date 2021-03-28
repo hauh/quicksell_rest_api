@@ -6,10 +6,11 @@ from django.contrib.auth import password_validation
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from drf_yasg.utils import swagger_serializer_method
+from fcm_django.models import FCMDevice
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.fields import CharField, Field, IntegerField
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
-from drf_yasg.utils import swagger_serializer_method
 
 from quicksell_app import models
 
@@ -46,23 +47,37 @@ class Profile(ModelSerializer):
 class User(ModelSerializer):
 	"""Users's account."""
 
+	full_name = CharField(write_only=True)
+	password = CharField(write_only=True)
+	fcm_id = CharField(min_length=100, write_only=True)
+
 	profile = Profile(read_only=True)
 
 	class Meta:
 		model = models.User
 		fields = (
-			'email', 'password', 'is_email_verified',
-			'date_joined', 'balance', 'profile'
+			'full_name', 'email', 'password', 'fcm_id',
+			'is_email_verified', 'date_joined', 'balance', 'profile'
 		)
 		read_only_fields = ('is_email_verified', 'date_joined', 'balance', 'profile')
-		extra_kwargs = {'password': {'write_only': True}}
 
 	def validate_password(self, password):
 		password_validation.validate_password(password)
 		return password
 
 	def create(self, validated_data):
-		return self.Meta.model.objects.create_user(**validated_data)
+		fcm_id = validated_data.pop('fcm_id')
+		full_name = validated_data.pop('full_name')
+		with transaction.atomic():
+			device, created = FCMDevice.objects.get_or_create(registration_id=fcm_id)
+			if not created:
+				return device.user
+			user = models.User.objects.create_user(device=device, **validated_data)
+			user.profile.full_name = full_name
+			user.profile.save()
+			device.user = user
+			device.save()
+		return user
 
 
 class CategoryField(Field):

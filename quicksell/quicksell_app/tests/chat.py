@@ -1,12 +1,13 @@
 """Chats tests."""
 
 import uuid
+from unittest import mock
 
 from django.urls import reverse
 from model_bakery import baker
 from rest_framework.status import (
-	HTTP_201_CREATED, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED,
-	HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
+	HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST,
+	HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
 )
 
 from quicksell_app import models
@@ -21,7 +22,10 @@ class BaseChatTest(BaseTest):
 
 	def setUp(self):
 		self.make_user()
-		self.interlocutor = baker.make(self.user_model, make_m2m=True)
+		self.user.device = baker.make('FCMDevice')
+		self.interlocutor = baker.make(
+			self.user_model, make_m2m=True, device=baker.make('FCMDevice')
+		)
 		self.interlocutor_uuid = self.base64uuid(self.interlocutor.profile.uuid)
 		self.listing = baker.make('Listing', seller=self.interlocutor.profile)
 		self.listing_uuid = self.base64uuid(self.listing.uuid)
@@ -39,29 +43,33 @@ class TestChat(BaseChatTest):
 			'listing_uuid': self.listing_uuid
 		}
 
-	def test_create_chat(self):
+	@mock.patch.object(BaseTest.user_model, 'push_notification')
+	def test_create_chat(self, mocked_push):
+		# create chat
 		response = self.POST(self.chats_url, HTTP_201_CREATED, self.data)
 		self.assertEqual(models.Chat.objects.count(), 1)
 		self.assertIn('uuid', response.data)
-
+		mocked_push.assert_called_once()
+		# check interlocutor
 		self.assertIn('interlocutor', response.data)
 		interlocutor = response.data['interlocutor']
 		self.assertIn('uuid', interlocutor)
 		self.assertEqual(interlocutor['uuid'], self.data['to_uuid'])
-
+		# check listing
 		self.assertIn('listing', response.data)
 		listing = response.data['listing']
 		self.assertIn('uuid', listing)
 		self.assertEqual(listing['uuid'], self.data['listing_uuid'])
 		self.assertIn('subject', response.data)
 		self.assertEqual(response.data['subject'], listing['title'])
-
+		# check message
 		self.assertEqual(models.Message.objects.count(), 1)
 		self.assertIn('latest_message', response.data)
 		message = response.data['latest_message']
 		self.assertEqual(message['text'], self.data['text'])
 
-	def test_invalid_create(self):
+	@mock.patch.object(BaseTest.user_model, 'push_notification')
+	def test_invalid_create(self, mocked_push):
 		for missing_field in self.data:
 			invalid_data = {**self.data}
 			invalid_data.pop(missing_field)
@@ -72,6 +80,7 @@ class TestChat(BaseChatTest):
 			self.POST(self.chats_url, HTTP_404_NOT_FOUND, invalid_data)
 		self.client.credentials()
 		self.POST(self.chats_url, HTTP_401_UNAUTHORIZED, self.data)
+		mocked_push.assert_not_called()
 
 	def test_get_chats(self):
 		self.assertEqual(models.Chat.objects.count(), 0)
@@ -85,19 +94,20 @@ class TestChat(BaseChatTest):
 		self.query_paginated_result(self.chats_url, None, q)
 
 
+@mock.patch.object(BaseTest.user_model, 'push_notification')
 class TestMessage(BaseChatTest):
 	"""GET, POST api/chats/<base64uuid>/"""
 
 	def setUp(self):
 		super().setUp()
-		chat = baker.make(
+		self.chat = baker.make(
 			models.Chat, make_m2m=True,
 			creator=self.user, interlocutor=self.interlocutor
 		)
-		self.chat_uuid = self.base64uuid(chat.uuid)
+		self.chat_uuid = self.base64uuid(self.chat.uuid)
 		self.messages_url = reverse('message', args=(self.chat_uuid,))
 
-	def test_post_message(self):
+	def test_post_message(self, mocked_push):
 		for user in (self.user, self.interlocutor):
 			self.authorize(user)
 			for text in ("Hello", "How are you?", "Whatever", "Goodbye!"):
@@ -109,12 +119,17 @@ class TestMessage(BaseChatTest):
 				self.assertIn('read', response.data)
 				self.assertEqual(response.data['read'], False)
 				self.assertIn('timestamp', response.data)
+				mocked_push.assert_called_once_with(
+					title=user.profile.full_name, body=text
+				)
+				mocked_push.reset_mock()
 
-	def test_invalid_post(self):
+	def test_invalid_post(self, mocked_push):
 		self.POST(self.messages_url, HTTP_400_BAD_REQUEST, {'text': None})
 		self.POST(self.messages_url, HTTP_400_BAD_REQUEST)
 		self.client.credentials()
 		self.POST(self.messages_url, HTTP_401_UNAUTHORIZED, {'text': "good"})
+		mocked_push.assert_not_called()
 
 		third_user = baker.make(self.user_model, make_m2m=True)
 		self.authorize(third_user)
@@ -123,13 +138,16 @@ class TestMessage(BaseChatTest):
 			'to_uuid': self.interlocutor_uuid,
 			'listing_uuid': self.listing_uuid
 		})
+		mocked_push.assert_called_once()
 		self.POST(self.messages_url, HTTP_403_FORBIDDEN, {'text': 'good'})
+		mocked_push.assert_called_once()
 
-	def test_load_chat(self):
+	def test_load_chat(self, mocked_push):
 		q = 123
 		strings = [uuid.uuid4().hex for _ in range(q)]
 		for message in strings:
 			self.POST(self.messages_url, HTTP_201_CREATED, {'text': message})
+		self.assertEqual(mocked_push.call_count, q)
 
 		for user, is_yours, read_status in (
 			(self.user, True, False),
@@ -148,12 +166,20 @@ class TestMessage(BaseChatTest):
 		for message in strings:
 			self.POST(self.messages_url, HTTP_201_CREATED, {'text': message})
 		self.query_paginated_result(self.messages_url, None, q * 2)
+		self.assertEqual(mocked_push.call_count, q * 2)
 
-	def test_invalid_load(self):
-		self.test_post_message()
-		messages_created = models.Message.objects.count()
-		self.query_paginated_result(self.messages_url, None, messages_created)
+	def test_invalid_load(self, _mocked_push):
+		msg_count = 10
+		for author in (self.user, self.interlocutor):
+			baker.make('Message', _quantity=msg_count, chat=self.chat, author=author)
+		self.assertEqual(models.Message.objects.count(), msg_count * 2)
+		self.query_paginated_result(self.messages_url, None, msg_count * 2)
 		self.GET(self.messages_url[:-2] + '/', HTTP_404_NOT_FOUND)
 		third_user = baker.make(self.user_model, make_m2m=True)
 		self.authorize(third_user)
 		self.GET(self.messages_url, HTTP_403_FORBIDDEN)
+
+	def test_delete_chat(self, _mocked_push):
+		self.assertEqual(models.Chat.objects.count(), 1)
+		self.DELETE(self.messages_url, HTTP_204_NO_CONTENT)
+		self.assertEqual(models.Chat.objects.count(), 0)

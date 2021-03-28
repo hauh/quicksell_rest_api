@@ -38,7 +38,6 @@ class User(GenericAPIView):
 	def setup(self, request, *args, **kwargs):
 		super().setup(request, *args, **kwargs)
 		if request.method == 'POST':
-			# pylint: disable=attribute-defined-outside-init
 			self.permission_classes = (AllowAny,)
 
 	@swagger_auto_schema(

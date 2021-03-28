@@ -8,7 +8,7 @@ from rest_framework.generics import (
 )
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_201_CREATED
+from rest_framework.status import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from quicksell_app import models, serializers
 
@@ -49,9 +49,17 @@ class Chat(ListCreateAPIView):
 			| models.Chat.objects.filter(interlocutor=self.request.user)
 		).order_by('updated_at')
 
+	def perform_create(self, serializer):
+		new_chat = serializer.save()
+		new_chat.interlocutor.push_notification(
+			title=new_chat.subject,
+			body=f"New chat from {new_chat.creator.profile.full_name}"
+		)
+		return new_chat
+
 
 class Message(GenericAPIView):
-	"""List Messages from a Chat or post to one."""
+	"""List Messages from a Chat or post to one, or delete Chat."""
 
 	serializer_class = serializers.Message
 	permission_classes = (IsAuthenticated,)
@@ -91,5 +99,18 @@ class Message(GenericAPIView):
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		chat = self.get_chat(request, base64uuid)
-		serializer.save(chat=chat, author=request.user)
+		message_author = request.user
+		serializer.save(chat=chat, author=message_author)
+		chat.interlocutor.push_notification(
+			title=message_author.profile.full_name,
+			body=serializer.data['text']
+		)
 		return Response(serializer.data, status=HTTP_201_CREATED)
+
+	@swagger_auto_schema(
+		operation_id='chat-delete',
+		operation_summary="Delete Chat",
+	)
+	def delete(self, request, base64uuid):
+		self.get_chat(request, base64uuid).delete()
+		return Response(status=HTTP_204_NO_CONTENT)

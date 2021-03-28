@@ -10,6 +10,7 @@ from django.db.models import (
 	CASCADE, SET_NULL
 )
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from fcm_django.models import FCMDevice
 
 from .basemodel import QuicksellManager, QuicksellModel
 
@@ -65,6 +66,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 	balance = IntegerField(default=0)
 	password_reset_code = IntegerField(null=True, blank=True)
 	password_reset_request_time = DateTimeField(null=True, blank=True)
+	device = ForeignKey(
+		FCMDevice, related_name='+', null=True, on_delete=CASCADE
+	)
 
 	@property
 	def profile(self):
@@ -88,6 +92,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 		super().clean()
 		self.email = User.objects.normalize_email(self.email)
 
+	def push_notification(self, **kwargs):
+		return self.device.send_message(timeout=kwargs.pop('timeout', 1), **kwargs)
+
 
 class Profile(QuicksellModel):
 	"""User profile info."""
@@ -104,7 +111,8 @@ class Profile(QuicksellModel):
 	rating = IntegerField(default=0)
 	avatar = ImageField(null=True, blank=True, upload_to='images/avatars')
 	location = ForeignKey(
-		'Location', related_name='+', null=True, blank=True, on_delete=SET_NULL)
+		'Location', related_name='+', null=True, blank=True, on_delete=SET_NULL
+	)
 
 	def __str__(self):
 		return str(self.user) + "'s profile."
