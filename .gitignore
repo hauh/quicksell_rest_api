@@ -1,7 +1,6 @@
 test.py
 secrets.py
 db.sqlite3
-migrations/
 quicksell/schema.yaml
 .coverage
 categories.yaml
