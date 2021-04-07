@@ -7,6 +7,7 @@ if [ ! -f .initialized ]; then
 	echo "Migrating database..."
 	python manage.py makemigrations quicksell_app
 	python manage.py migrate quicksell_app
+	python manage.py migrate
 	echo "Collecting static files..."
 	python manage.py collectstatic --no-input
 	echo "Performing tests..."
