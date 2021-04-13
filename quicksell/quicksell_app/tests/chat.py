@@ -38,18 +38,15 @@ class TestChat(BaseChatTest):
 	def setUp(self):
 		super().setUp()
 		self.data = {
-			'text': "Hello!",
 			'to_uuid': self.interlocutor_uuid,
 			'listing_uuid': self.listing_uuid
 		}
 
-	@mock.patch.object(BaseTest.user_model, 'push_notification')
-	def test_create_chat(self, mocked_push):
+	def test_create_chat(self):
 		# create chat
 		response = self.POST(self.chats_url, HTTP_201_CREATED, self.data)
 		self.assertEqual(models.Chat.objects.count(), 1)
 		self.assertIn('uuid', response.data)
-		mocked_push.assert_called_once()
 		# check interlocutor
 		self.assertIn('interlocutor', response.data)
 		interlocutor = response.data['interlocutor']
@@ -62,25 +59,16 @@ class TestChat(BaseChatTest):
 		self.assertEqual(listing['uuid'], self.data['listing_uuid'])
 		self.assertIn('subject', response.data)
 		self.assertEqual(response.data['subject'], listing['title'])
-		# check message
-		self.assertEqual(models.Message.objects.count(), 1)
-		self.assertIn('latest_message', response.data)
-		message = response.data['latest_message']
-		self.assertEqual(message['text'], self.data['text'])
 
-	@mock.patch.object(BaseTest.user_model, 'push_notification')
-	def test_invalid_create(self, mocked_push):
-		for missing_field in self.data:
+	def test_invalid_create(self):
+		for field in self.data:
 			invalid_data = {**self.data}
-			invalid_data.pop(missing_field)
-			self.POST(self.chats_url, HTTP_400_BAD_REQUEST, invalid_data)
-		for not_in_db in ('to_uuid', 'listing_uuid'):
-			invalid_data = {**self.data}
-			invalid_data[not_in_db] = self.base64uuid(uuid.uuid4())
+			invalid_data[field] = self.base64uuid(uuid.uuid4())  # not in db
 			self.POST(self.chats_url, HTTP_404_NOT_FOUND, invalid_data)
+			del invalid_data[field]  # missing required field
+			self.POST(self.chats_url, HTTP_400_BAD_REQUEST, invalid_data)
 		self.client.credentials()
 		self.POST(self.chats_url, HTTP_401_UNAUTHORIZED, self.data)
-		mocked_push.assert_not_called()
 
 	def test_get_chats(self):
 		self.assertEqual(models.Chat.objects.count(), 0)
@@ -129,18 +117,15 @@ class TestMessage(BaseChatTest):
 		self.POST(self.messages_url, HTTP_400_BAD_REQUEST)
 		self.client.credentials()
 		self.POST(self.messages_url, HTTP_401_UNAUTHORIZED, {'text': "good"})
-		mocked_push.assert_not_called()
 
 		third_user = baker.make(self.user_model, make_m2m=True)
 		self.authorize(third_user)
 		self.POST(self.chats_url, HTTP_201_CREATED, {
-			'text': 'good',
 			'to_uuid': self.interlocutor_uuid,
 			'listing_uuid': self.listing_uuid
 		})
-		mocked_push.assert_called_once()
 		self.POST(self.messages_url, HTTP_403_FORBIDDEN, {'text': 'good'})
-		mocked_push.assert_called_once()
+		mocked_push.assert_not_called()
 
 	def test_load_chat(self, mocked_push):
 		q = 123

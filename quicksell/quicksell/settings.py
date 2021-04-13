@@ -31,6 +31,11 @@ USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 AUTH_USER_MODEL = 'quicksell_app.User'
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
+ROOT_URLCONF = 'quicksell.urls'
+WSGI_APPLICATION = 'quicksell.wsgi.application'
+
 
 # Application definition
 
@@ -65,8 +70,6 @@ MIDDLEWARE = [
 	'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'quicksell.urls'
-
 TEMPLATES = [
 	{
 		'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -82,8 +85,6 @@ TEMPLATES = [
 		},
 	},
 ]
-
-WSGI_APPLICATION = 'quicksell.wsgi.application'
 
 
 # Database
@@ -104,6 +105,7 @@ DATABASES = {
 	},
 }
 
+
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
 
@@ -122,13 +124,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'Europe/Moscow'
-
 USE_I18N = True
-
 USE_L10N = True
-
 # USE_TZ = True
 
 
@@ -138,6 +136,8 @@ USE_L10N = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static'
 
+
+# Django Rest Framework
 
 REST_FRAMEWORK = {
 	'DEFAULT_METADATA_CLASS': 'quicksell_app.misc.NoMetadata',
@@ -162,11 +162,15 @@ REST_FRAMEWORK = {
 }
 
 
+# Emails
+
 DEFAULT_FROM_EMAIL = 'Quicksell Mailer <noreply@quicksell.ru>'
 EMAIL_HOST = 'localhost'
 EMAIL_PORT = 25
 EMAIL_USE_TLS = False
 
+
+# Swagger
 
 SWAGGER_SETTINGS = {
 	'SECURITY_DEFINITIONS': {
@@ -180,6 +184,8 @@ SWAGGER_SETTINGS = {
 	'DEFAULT_INFO': 'quicksell_app.schema.schema_info'
 }
 
+
+# Firebase Cloud Messaging
 
 FCM_DJANGO_SETTINGS = {
 	'APP_VERBOSE_NAME': "Quicksell App",

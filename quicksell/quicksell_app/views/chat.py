@@ -47,15 +47,7 @@ class Chat(ListCreateAPIView):
 		return (
 			models.Chat.objects.filter(creator=self.request.user)
 			| models.Chat.objects.filter(interlocutor=self.request.user)
-		).order_by('updated_at')
-
-	def perform_create(self, serializer):
-		new_chat = serializer.save()
-		new_chat.interlocutor.push_notification(
-			title=new_chat.subject,
-			body=f"New chat from {new_chat.creator.profile.full_name}"
-		)
-		return new_chat
+		).order_by('-updated_at')
 
 
 class Message(GenericAPIView):

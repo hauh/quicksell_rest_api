@@ -137,7 +137,6 @@ class Chat(ModelSerializer):
 	"""Chat serializer."""
 
 	# POST
-	text = CharField(write_only=True)
 	to_uuid = Base64UUIDField(write_only=True)
 	listing_uuid = Base64UUIDField(write_only=True)
 
@@ -150,7 +149,7 @@ class Chat(ModelSerializer):
 	class Meta:
 		model = models.Chat
 		fields = (
-			'to_uuid', 'listing_uuid', 'text',
+			'to_uuid', 'listing_uuid',
 			'uuid', 'subject', 'interlocutor', 'listing', 'latest_message'
 		)
 		read_only_fields = fields
@@ -165,21 +164,20 @@ class Chat(ModelSerializer):
 
 	@swagger_serializer_method(Message)
 	def get_latest_message(self, chat_object):
-		latest_message = chat_object.messages.latest('timestamp')
-		return Message(latest_message, context=self.context).data
+		try:
+			latest_message = chat_object.messages.latest('timestamp')
+			return Message(latest_message, context=self.context).data
+		except models.Message.DoesNotExist:
+			return None
 
 	def create(self, val_data):
 		creator = self.context['request'].user
 		to_user = get_object_or_404(models.Profile, uuid=val_data['to_uuid']).user
 		listing = get_object_or_404(models.Listing, uuid=val_data['listing_uuid'])
-		with transaction.atomic():
-			new_chat = models.Chat.objects.create(
-				creator=creator,
-				interlocutor=to_user,
-				listing=listing,
-				subject=listing.title
-			)
-			models.Message.objects.create(
-				text=val_data['text'], author=creator, chat=new_chat
-			)
-		return new_chat
+		chat, created = models.Chat.objects.get_or_create(
+			creator=creator, interlocutor=to_user, listing=listing
+		)
+		if created:
+			chat.subject = listing.title
+			chat.save()
+		return chat
