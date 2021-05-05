@@ -3,14 +3,14 @@
 import uuid
 from datetime import date, datetime
 
-from django.db.models import (
-	CharField, TextField, EmailField, ImageField,
-	UUIDField, IntegerField, DecimalField, BooleanField,
-	DateTimeField, DateField, OneToOneField, ForeignKey,
-	CASCADE, SET_NULL
-)
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-from fcm_django.models import FCMDevice
+from django.db.models import (
+	CASCADE, BooleanField, CharField, DateField, DateTimeField, EmailField,
+	ForeignKey, ImageField, IntegerChoices, IntegerField, OneToOneField,
+	PositiveSmallIntegerField, TextField, UUIDField
+)
+from pyfcm import FCMNotification
 
 from .basemodel import QuicksellManager, QuicksellModel
 
@@ -49,6 +49,46 @@ class UserManager(QuicksellManager):
 		return self.get(**{self.model.USERNAME_FIELD: username})
 
 
+class DeviceManager(QuicksellManager):
+	"""Device manager."""
+
+	MAX_FAILS = 10
+
+	client = FCMNotification(settings.FCM_TOKEN)
+
+
+class Device(QuicksellModel):
+	"""User's device."""
+
+	objects = DeviceManager()
+
+	class Platform(IntegerChoices):
+		"""Device platform."""
+
+		other = 0, 'Other'
+		android = 1, 'Android'
+		ios = 2, 'iOS'
+
+	fcm_id = TextField(db_index=True)
+	is_active = BooleanField(default=True)
+	fails_count = PositiveSmallIntegerField(default=0)
+	platform = PositiveSmallIntegerField(choices=Platform.choices, default=0)
+
+	def send_push_notification(self, **kwargs):
+		response = self.objects.client.notify_single_device(
+			registartion_token=self.fcm_id,
+			timeout=kwargs.pop('timeout', 1),
+			**kwargs
+		)
+		if 'error' in response['results'][0]:
+			if self.fails_count >= DeviceManager.MAX_FAILS:
+				self.update(active=False)
+			else:
+				self.update(fails_count=self.fails_count + 1)
+		elif self.fails_count:
+			self.update(fails_count=0)
+
+
 class User(AbstractBaseUser, PermissionsMixin):
 	"""User model."""
 
@@ -67,7 +107,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 	password_reset_code = IntegerField(null=True, blank=True)
 	password_reset_request_time = DateTimeField(null=True, blank=True)
 	device = ForeignKey(
-		FCMDevice, related_name='+', null=True, on_delete=CASCADE
+		Device, related_name='owner', null=True, on_delete=CASCADE
 	)
 
 	@property
@@ -92,8 +132,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 		super().clean()
 		self.email = User.objects.normalize_email(self.email)
 
-	def push_notification(self, **kwargs):
-		return self.device.send_message(timeout=kwargs.pop('timeout', 1), **kwargs)
+	def notify(self, **kwargs):
+		if self.device.is_active:
+			self.device.send_push_notification(**kwargs)
 
 
 class Profile(QuicksellModel):

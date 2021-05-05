@@ -7,7 +7,6 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from drf_yasg.utils import swagger_serializer_method
-from fcm_django.models import FCMDevice
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.fields import CharField, Field, IntegerField
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
@@ -59,7 +58,7 @@ class User(ModelSerializer):
 			'full_name', 'email', 'password', 'fcm_id',
 			'is_email_verified', 'date_joined', 'balance', 'profile'
 		)
-		read_only_fields = ('is_email_verified', 'date_joined', 'balance', 'profile')
+		read_only_fields = 'is_email_verified', 'date_joined', 'balance', 'profile'
 
 	def validate_password(self, password):
 		password_validation.validate_password(password)
@@ -69,14 +68,15 @@ class User(ModelSerializer):
 		fcm_id = validated_data.pop('fcm_id')
 		full_name = validated_data.pop('full_name')
 		with transaction.atomic():
-			device, created = FCMDevice.objects.get_or_create(registration_id=fcm_id)
+			device, created = models.Device.objects.get_or_create(fcm_id=fcm_id)
 			if not created:
-				return device.user
+				device.is_active = True
+				device.fails_count = 0
+				device.save()
+				return device.owner
 			user = models.User.objects.create_user(device=device, **validated_data)
 			user.profile.full_name = full_name
 			user.profile.save()
-			device.user = user
-			device.save()
 		return user
 
 

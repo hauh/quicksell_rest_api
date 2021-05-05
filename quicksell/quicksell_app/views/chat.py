@@ -31,9 +31,8 @@ from quicksell_app import models, serializers
 		operation_id='chat-create',
 		operation_summary="Create Chat",
 		operation_description=(
-			"Create new Chat with `to_uuid` User and post `text` to it "
-			"as a first Message. Chat's `subject` will be set the same as "
-			"as a title of Listing from `listing_uuid`."
+			"Create new Chat with `to_uuid` User. Chat's `subject` will be set "
+			"the same as as a title of Listing from `listing_uuid`."
 		)
 	)
 )
@@ -93,7 +92,7 @@ class Message(GenericAPIView):
 		chat = self.get_chat(request, base64uuid)
 		message_author = request.user
 		serializer.save(chat=chat, author=message_author)
-		chat.interlocutor.push_notification(
+		chat.interlocutor.notify(
 			title=message_author.profile.full_name,
 			body=serializer.data['text']
 		)

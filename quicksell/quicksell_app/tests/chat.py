@@ -11,7 +11,6 @@ from rest_framework.status import (
 )
 
 from quicksell_app import models
-
 from .basetest import BaseTest
 
 
@@ -22,9 +21,9 @@ class BaseChatTest(BaseTest):
 
 	def setUp(self):
 		self.make_user()
-		self.user.device = baker.make('FCMDevice')
+		self.user.device = baker.make('Device')
 		self.interlocutor = baker.make(
-			self.user_model, make_m2m=True, device=baker.make('FCMDevice')
+			self.user_model, make_m2m=True, device=baker.make('Device')
 		)
 		self.interlocutor_uuid = self.base64uuid(self.interlocutor.profile.uuid)
 		self.listing = baker.make('Listing', seller=self.interlocutor.profile)
@@ -82,7 +81,7 @@ class TestChat(BaseChatTest):
 		self.query_paginated_result(self.chats_url, None, q)
 
 
-@mock.patch.object(BaseTest.user_model, 'push_notification')
+@mock.patch.object(BaseTest.user_model, 'notify')
 class TestMessage(BaseChatTest):
 	"""GET, POST api/chats/<base64uuid>/"""
 

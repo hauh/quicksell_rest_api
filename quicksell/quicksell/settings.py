@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ['SECRET_KEY']
+FCM_TOKEN = os.environ['FCM_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -52,7 +53,6 @@ INSTALLED_APPS = [
 	'mptt',
 	'drf_yasg',
 	'silk',
-	'fcm_django',
 
 	'quicksell_app',
 ]
@@ -182,14 +182,4 @@ SWAGGER_SETTINGS = {
 	},
 	'DEFAULT_AUTO_SCHEMA_CLASS': 'quicksell_app.schema.FilteringFieldsAutoSchema',
 	'DEFAULT_INFO': 'quicksell_app.schema.schema_info'
-}
-
-
-# Firebase Cloud Messaging
-
-FCM_DJANGO_SETTINGS = {
-	'APP_VERBOSE_NAME': "Quicksell App",
-	'FCM_SERVER_KEY': os.environ['FCM_KEY'],
-	'ONE_DEVICE_PER_USER': False,
-	'DELETE_INACTIVE_DEVICES': False,
 }
