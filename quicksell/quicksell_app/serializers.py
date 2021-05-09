@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from django.contrib.auth import password_validation
+from django.contrib.gis.geos import Point
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -29,10 +30,46 @@ class Base64UUIDField(Field):
 			raise NotFound() from err
 
 
+class PointField(Field):
+	"""Point serialization."""
+
+	def to_representation(self, point):
+		return f'{point.x}, {point.y}'
+
+	def to_internal_value(self, coordinates):
+		try:
+			x, y = (float(coord) for coord in coordinates.split(','))
+		except (ValueError, TypeError) as e:
+			raise ValidationError("Required format: 'latitude, longitude'.") from e
+		return Point(x, y)
+
+
+class Location(ModelSerializer):
+	"""Location serializer."""
+
+	coordinates = PointField()
+
+	class Meta:
+		model = models.Location
+		fields = 'coordinates', 'address'
+
+	def create(self, validated_data):
+		coords = validated_data.pop('coordinates')
+		location, _ = models.Location.objects.get_or_create(coordinates=coords)
+		return super().update(location, validated_data)
+
+	def update(self, location, validated_data):
+		coords = validated_data.pop('coordinates', None)
+		if location.coordinates != coords:
+			location, _ = models.Location.objects.get_or_create(coordinates=coords)
+		return super().update(location, validated_data)
+
+
 class Profile(ModelSerializer):
 	"""Users' Profile info."""
 
 	uuid = Base64UUIDField(read_only=True)
+	location = Location(required=False)
 
 	class Meta:
 		model = models.Profile
@@ -40,7 +77,12 @@ class Profile(ModelSerializer):
 			'uuid', 'date_created', 'full_name', 'about',
 			'online', 'rating', 'avatar', 'location'
 		)
-		read_only_fields = ('uuid', 'date_created', 'online', 'rating', 'location')
+		read_only_fields = 'uuid', 'date_created', 'online', 'rating'
+
+	def update(self, profile, validated_data):
+		if location_data := validated_data.pop('location', None):
+			profile.location = Location().update(profile.location, location_data)
+		return super().update(profile, validated_data)
 
 
 class User(ModelSerializer):
@@ -103,13 +145,14 @@ class Listing(ModelSerializer):
 	price = IntegerField(min_value=0)
 	seller = Profile(read_only=True)
 	category = CategoryField()
+	location = Location()
 
 	class Meta:
 		model = models.Listing
 		fields = (
 			'uuid', 'title', 'description', 'price', 'category', 'status',
 			'quantity', 'sold', 'views', 'date_created', 'date_expires',
-			'location', 'condition_new', 'characteristics', 'seller', 'photos'
+			'location', 'condition_new', 'properties', 'seller', 'photos'
 		)
 		depth = 1
 		read_only_fields = (
@@ -117,6 +160,16 @@ class Listing(ModelSerializer):
 			'date_expires', 'seller', 'shop', 'photos'
 		)
 		ordering = 'created'
+
+	def create(self, validated_data):
+		with transaction.atomic():
+			location = Location().create(validated_data.pop('location'))
+			return models.Listing.objects.create(location=location, **validated_data)
+
+	def update(self, listing, validated_data):
+		if location_data := validated_data.pop('location', None):
+			listing.location = Location().update(listing.location, location_data)
+		return super().update(listing, validated_data)
 
 
 class Message(ModelSerializer):

@@ -3,17 +3,22 @@
 import uuid
 from datetime import datetime, timedelta
 
-from django.db.models import (
-	CASCADE, SET, SET_NULL, BooleanField, CharField, DateTimeField, ForeignKey,
-	ImageField, IntegerChoices, JSONField, PositiveIntegerField,
+from django.db.models.deletion import CASCADE, SET
+from django.db.models.enums import IntegerChoices
+from django.db.models.fields import (
+	BooleanField, CharField, DateTimeField, PositiveIntegerField,
 	PositiveSmallIntegerField, SmallIntegerField, TextField, UUIDField
 )
+from django.db.models.fields.files import ImageField
+from django.db.models.fields.json import JSONField
+from django.db.models.fields.related import ForeignKey
 from mptt.models import MPTTModel, TreeForeignKey
 
-from .basemodel import QuicksellModel
+from .basemodel import QuicksellModel, SerializationMixin
+from .geography import location_fk_kwargs
 
 
-class Category(MPTTModel):
+class Category(MPTTModel, SerializationMixin):
 	"""Listing's categories."""
 
 	name = CharField(max_length=64, unique=True)
@@ -64,10 +69,9 @@ class Listing(QuicksellModel):
 	date_created = DateTimeField(default=datetime.now, editable=False)
 	date_expires = DateTimeField(default=default_expiration_date)
 	condition_new = BooleanField(default=False)
-	characteristics = JSONField(null=True, blank=True)
-	location = ForeignKey(
-		'Location', related_name='+', null=True, on_delete=SET_NULL)
+	properties = JSONField(null=True, blank=True)
 	seller = ForeignKey('Profile', related_name='listings', on_delete=CASCADE)
+	location = ForeignKey(**location_fk_kwargs)
 
 	def __str__(self):
 		return self.title

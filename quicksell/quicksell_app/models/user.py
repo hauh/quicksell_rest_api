@@ -5,15 +5,18 @@ from datetime import date, datetime
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-from django.db.models import (
-	CASCADE, BooleanField, CharField, DateField, DateTimeField, EmailField,
-	ForeignKey, ImageField, IntegerChoices, IntegerField, OneToOneField,
+from django.db.models.deletion import CASCADE
+from django.db.models.enums import IntegerChoices
+from django.db.models.fields import (
+	BooleanField, CharField, DateField, DateTimeField, EmailField, IntegerField,
 	PositiveSmallIntegerField, TextField, UUIDField
 )
+from django.db.models.fields.files import ImageField
+from django.db.models.fields.related import ForeignKey, OneToOneField
 from pyfcm import FCMNotification
 
-from .basemodel import QuicksellManager, QuicksellModel
-
+from .basemodel import QuicksellManager, QuicksellModel, SerializationMixin
+from .geography import location_fk_kwargs
 
 MESSAGES = {
 	'unique': "A user with this email already exists.",
@@ -24,9 +27,10 @@ class LowercaseEmailField(EmailField):
 	"""Case-insensitive email field."""
 
 	def to_python(self, value):
-		if not isinstance(value, str):
+		try:
+			return value.lower()
+		except AttributeError:
 			return value
-		return value.lower()
 
 
 class UserManager(QuicksellManager):
@@ -89,7 +93,7 @@ class Device(QuicksellModel):
 			self.update(fails_count=0)
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin, SerializationMixin):
 	"""User model."""
 
 	USERNAME_FIELD = 'email'
@@ -151,19 +155,10 @@ class Profile(QuicksellModel):
 	online = BooleanField(default=True)
 	rating = IntegerField(default=0)
 	avatar = ImageField(null=True, blank=True, upload_to='images/avatars')
-	location = ForeignKey(
-		'Location', related_name='+', null=True, blank=True, on_delete=SET_NULL
-	)
+	location = ForeignKey(**location_fk_kwargs)
 
 	def __str__(self):
 		return str(self.user) + "'s profile."
-
-
-class Location(QuicksellModel):
-	"""Location model."""
-
-	longitude = DecimalField(max_digits=9, decimal_places=6)
-	latitude = DecimalField(max_digits=9, decimal_places=6)
 
 
 class BusinessAccount(QuicksellModel):

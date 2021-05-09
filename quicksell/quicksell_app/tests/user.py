@@ -1,23 +1,19 @@
 """User testing."""
 
-from functools import partial
 from datetime import datetime, timedelta
+from functools import partial
 
-from django.urls import reverse
 from django.core import mail
 from django.core.cache import cache
-
-from rest_framework.status import (
-	HTTP_200_OK, HTTP_201_CREATED, HTTP_202_ACCEPTED,
-	HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN,
-	HTTP_404_NOT_FOUND, HTTP_429_TOO_MANY_REQUESTS
-)
+from django.urls import reverse
 from model_bakery import baker
+from rest_framework.status import (
+	HTTP_200_OK, HTTP_201_CREATED, HTTP_202_ACCEPTED, HTTP_400_BAD_REQUEST,
+	HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND,
+	HTTP_429_TOO_MANY_REQUESTS
+)
 
-from quicksell_app.models import Profile as profile_model
-from quicksell_app.serializers import (
-	User as user_serializer, Profile as profile_serializer)
-
+from quicksell_app import models
 from .basetest import BaseTest
 
 
@@ -37,7 +33,11 @@ class BaseUserTest(BaseTest):
 		'email': good_mail,
 		'password': good_pass,
 		'full_name': "Qucksell User",
-		'fcm_id': 'some_fcm_id' * 10
+		'fcm_id': 'some_fcm_id' * 10,
+		'location': {
+			'coordinates': "12.345678, 87.654321",
+			'address': "Test avenue 42"
+		}
 	}
 
 	def valid_email_variants(self, email):
@@ -86,7 +86,7 @@ class TestUserCreation(BaseUserTest):
 		response = self.POST(self.url_user, HTTP_201_CREATED, self.valid_reg_data)
 		self.assertEqual(self.user_model.objects.count(), 1)
 		user = self.user_model.objects.get(email=response.data['email'])
-		self.assertDictEqual(response.data, user_serializer(user).data)
+		self.assertDictEqual(response.data, user.serialize())
 		# checking email confirmation
 		self.assertEqual(len(mail.outbox), 1)
 		email = mail.outbox[0]
@@ -106,6 +106,8 @@ class TestUserCreation(BaseUserTest):
 			{'email': "", 'password': self.good_pass},
 			{'email': None, 'password': self.good_pass},
 			{'password': self.good_pass},
+			{'location': 'bad location'},
+			{'location': {'coordinates': 'bad coords', 'address': 'ok'}}
 		):
 			self.POST(self.url_user, HTTP_400_BAD_REQUEST, data)
 			self.assertEqual(self.user_model.objects.count(), 0)
@@ -127,7 +129,7 @@ class TestUserCreation(BaseUserTest):
 		# set token and check again
 		self.authorize()
 		response = self.GET(self.url_user, HTTP_200_OK)
-		self.assertDictEqual(response.data, user_serializer(self.user).data)
+		self.assertDictEqual(response.data, self.user.serialize())
 
 
 class TestEmailConfirmation(BaseUserTest):
@@ -317,11 +319,11 @@ class TestProfileActions(BaseUserTest):
 	def test_get_profile(self):
 		profile_url = self.url_profile_detail(args=('invalid_uuid',))
 		self.GET(profile_url, HTTP_404_NOT_FOUND)
-		valid_uuid = profile_serializer(self.user.profile).data['uuid']
+		valid_uuid = self.user.profile.serialize()['uuid']
 		not_existing_url = self.url_profile_detail(args=(valid_uuid[:-3] + 'abs',))
 		self.GET(not_existing_url, HTTP_404_NOT_FOUND)
 		for user in baker.make(self.user_model, make_m2m=True, _quantity=10):
-			serialized_profile = profile_serializer(user.profile).data
+			serialized_profile = user.profile.serialize()
 			profile_url = self.url_profile_detail(args=(serialized_profile['uuid'],))
 			response = self.GET(profile_url, HTTP_200_OK)
 			self.assertDictEqual(response.data, serialized_profile)
@@ -329,13 +331,13 @@ class TestProfileActions(BaseUserTest):
 	def test_query_profiles(self):
 		check_result = partial(self.query_paginated_result, self.url_profile)
 		q = 111
-		baker.make(profile_model, _quantity=q, rating=0, full_name="++TEST++")
-		baker.make(profile_model, _quantity=q, rating=10, online=False)
-		baker.make(profile_model, _quantity=q, rating=20, full_name="T++T")
+		baker.make(models.Profile, _quantity=q, rating=0, full_name="++TEST++")
+		baker.make(models.Profile, _quantity=q, rating=10, online=False)
+		baker.make(models.Profile, _quantity=q, rating=20, full_name="T++T")
 		max_q = q * 3 + 1
 		self.profile.rating = 12
 		self.profile.save()
-		self.assertEqual(profile_model.objects.count(), max_q)
+		self.assertEqual(models.Profile.objects.count(), max_q)
 
 		check_result({'min_rating': 10}, max_q - q)
 		check_result({'min_rating': 20}, q)
@@ -375,14 +377,16 @@ class TestProfileActions(BaseUserTest):
 		data = {'full_name': "Test User"}
 		response = self.PATCH(self.url_profile, HTTP_200_OK, data)
 		self.profile.refresh_from_db()
-		self.assertDictEqual(response.data, profile_serializer(self.profile).data)
+		self.assertDictEqual(response.data, self.profile.serialize())
 		# edit everything
 		filled_profile = baker.prepare(
-			profile_model, _fill_optional=True, _save_related=True, online=False)
-		new_data = profile_serializer(filled_profile).data
+			models.Profile, _fill_optional=True, _save_related=True, online=False,
+			location=models.Location.objects.get(pk=models.Location.default_pk())
+		)
+		new_data = filled_profile.serialize()
 		response = self.PATCH(self.url_profile, HTTP_200_OK, new_data)
 		self.profile.refresh_from_db()
-		self.assertDictEqual(response.data, profile_serializer(self.profile).data)
+		self.assertDictEqual(response.data, self.profile.serialize())
 		# unauthenticated edit
 		self.client.credentials()
 		data = {'full_name': "Should not change"}
@@ -403,7 +407,7 @@ class TestUserFull(BaseUserTest):
 				data[key] += str(i)
 			response = self.POST(self.url_user, HTTP_201_CREATED, data)
 			user = self.user_model.objects.get(email=data['email'])
-			self.assertDictEqual(response.data, user_serializer(user).data)
+			self.assertDictEqual(response.data, user.serialize())
 			# confirm email
 			confirm_email_url = mail.outbox[-1].body.split('\n')[1]
 			self.GET(confirm_email_url, HTTP_200_OK)
@@ -420,7 +424,7 @@ class TestUserFull(BaseUserTest):
 			data = {'full_name': "Dummy", 'about': "Test user."}
 			response = self.PATCH(self.url_profile, HTTP_200_OK, data)
 			user.profile.refresh_from_db()
-			self.assertDictEqual(response.data, profile_serializer(user.profile).data)
+			self.assertDictEqual(response.data, user.profile.serialize())
 			# update password
 			data = {'old_password': self.good_pass, 'new_password': self.good_pass2}
 			self.PUT(self.url_password, HTTP_200_OK, data)

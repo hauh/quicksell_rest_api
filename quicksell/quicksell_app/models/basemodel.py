@@ -15,7 +15,19 @@ class QuicksellManager(Manager):
 			return None
 
 
-class QuicksellModel(Model):
+class SerializationMixin:
+	"""Manual serialization for tests."""
+
+	def serialize(self):
+		# breaking circular import - pylint: disable=import-outside-toplevel
+		from quicksell_app import serializers
+		try:
+			return getattr(serializers, self.__class__.__name__)(self).data
+		except AttributeError:
+			return str(self)
+
+
+class QuicksellModel(Model, SerializationMixin):
 	"""Model to use with custom Manager."""
 
 	objects = QuicksellManager()
